@@ -32,15 +32,21 @@ upstream an den gepatchten Stellen etwas geändert – Patch nachziehen.
 Getestet (1.11.2026, modem73 2.4.8): Build mit MinGW, Kurztest unter Wine (KISS-Frame
 angenommen, CSMA, PTT, TX-Audio). Mit echter Soundkarte/Funkgerät noch offen.
 
-## Start (Beispiel)
+## Betrieb mit dem kisshub
+
+Der kisshub startet modem73 selbst: Profil `modem73`, Abschnitt `[modem73]` in der
+`kisshub.conf`, Start `kisshub.bat -p modem73` – Beschreibung in MANUAL.md 3.5a. Die
+Kommandozeile unten ist nur für einen Test von Hand.
+
+## Start von Hand (Beispiel)
 Direwolf vorher beenden (gleiche Soundkarte).
 ```
 modem73.exe --list-audio
 modem73.exe --headless -c OE3GAS -p 8011 --bind 127.0.0.1 ^
   -m QAM16 -r 1/2 --short --csma-band vhf ^
   --input-device "<Name>" --output-device "<Name>" ^
-  --ptt com --com-port COM5 --com-line rts --ptt-delay 250 --tx-level 60
+  --ptt com --com-port COM5 --com-line rts --tx-delay 300 --tx-level 60
 ```
-Port 8011, weil der kisshub selbst 8001 belegt. kisshub vorerst: `profile = generic`,
-`transport = tcp`, Port 8011. PACLEN + AX.25-Header muss in die Frame-Nutzlast passen
-(QAM16 1/2 short: 254 Byte), sonst schneidet modem73 das Frame ab.
+Port 8011: 8001 ist der KISS-Port von Direwolf, 8101 der des kisshub. PACLEN + AX.25-Kopf
+muss in die Nutzlast eines Rahmens passen (QAM16 1/2 short: 254 Byte), sonst schneidet
+modem73 den Frame ab – mit dem Profil `modem73` achtet der kisshub darauf.

@@ -6,6 +6,7 @@
 ;
 ; ONE FILE FOR ALL TNCs: start with -p to pick the profile, e.g.
 ;   kisshub.bat -p pk232      kisshub.bat -p vara-fm      kisshub.bat -p direwolf
+;   kisshub.bat -p modem73
 ; -p overrides [tnc] profile. [<section>.<profile>] (e.g. [kiss.pk232] or
 ; [tnc.vara-fm]) overrides a section for that profile only, {profile} in the
 ; [log] file names becomes the profile name. kisshub -h (or -?) shows the help.
@@ -13,14 +14,17 @@
 [tnc]
 profile   = pk232          ; default when started without -p: pk232 | tm-d710 | tnc7multi |
                            ; th-d74 |
-                           ; th-d75 | tnc2-kiss | generic | vara-fm | vara-hf | direwolf
+                           ; th-d75 | tnc2-kiss | generic | vara-fm | vara-hf | direwolf |
+                           ; modem73
 ; transport = serial       ; serial | tcp - default: tcp for vara-* / direwolf, else serial
 device    = COM3           ; serial only: Windows COM3, Raspberry Pi /dev/ttyUSB0
 serial_baud = 9600         ; PC <-> TNC (PK-232: its TBAUD; 9600 as pk232py uses it)
 ; rtscts    =              ; RTS/CTS hardware flow control - default: yes for tm-d710
 ;                          ; (the radio paces kisshub over CTS), no for the others
 ; host = 127.0.0.1         ; tcp only
-; port =                   ; tcp only - default: vara-* 8100, direwolf KISSPORT (else 8001)
+;                          ;   tcp for modem73 too
+; port =                   ; tcp only - default: vara-* 8100, direwolf KISSPORT, modem73 8011
+;                          ; (else 8001)
 reconnect_sec = 10
 exit_kiss_on_stop = yes    ; on Ctrl+C: leave KISS, so pk232py / a terminal finds cmd:
 ; smack = no               ; KISS with CRC-16 (SMACK) - default: yes for tnc7multi, no else
@@ -39,6 +43,8 @@ direwolf_conf = C:\direwolf ; only used by profile direwolf
 ; vara_bundle_ms = 0       ; >0: tunnelled frames within this time go as ONE type-2 frame
 ;                          ; (experiment: no gain with VARA FM Narrow)
 ; vara_bundle_max = 4000   ; bytes per bundle (VARA takes up to 5000)
+
+; profile = modem73: see [modem73] below - kisshub starts modem73 itself.
 
 [kiss]                     ; ALL OPTIONAL - the profile (or direwolf.conf) has the defaults
 ; air_baud    =            ; vara-fm 350 | direwolf MODEM | others 1200
@@ -85,6 +91,39 @@ monitor  = no              ; yes: listen on VARA's command port - read only, sen
 ; host   = 127.0.0.1       ; default: [tnc] host
 cmd_port = 8300            ; VARA Setup "Command"
 sn_window_ms = 1500        ; an SN line belongs to a frame received this close to it
+
+[modem73]                  ; only with profile modem73 (tools/modem73/README.md)
+; kisshub starts modem73 (headless) with these values, waits for its KISS port and
+; stops it again with Ctrl+C. Air time, PACLEN and the AX.25 recommendation follow from
+; modulation / code_rate / frame - [kiss] air_baud / txdelay_ms are not used.
+; BOTH stations need modem73 - 1200 Bd stations and digis do not hear it.
+; Direwolf off first: modem73 needs the sound card for itself.
+callsign      = N0CALL     ; YOUR callsign, no SSID - modem73 puts it into every OFDM frame
+; start       = yes        ; no: modem73 is started by hand / elsewhere, kisshub only connects
+exe           = modem73.exe ; path to modem73.exe (relative: to this file's folder)
+modulation    = QAM16      ; BPSK | QPSK | 8PSK | QAM16 | QAM64 | QAM256 | QAM1024 | QAM4096
+code_rate     = 1/2        ; 1/2 | 2/3 | 3/4 | 5/6 | 1/4 | 1/2x2 | 1/4x2
+frame         = short      ; short | normal | long - short: 254 B in 0.96 s (QAM16 1/2);
+                           ; every frame costs its full time, an RR as much as an I frame
+; input_device  =          ; capture, name from "modem73.exe --list-audio" (empty: default)
+; output_device =          ; playback, the same
+tx_level      = 60         ; percent 5..100 - set the deviation with this, not the radio
+ptt           = com        ; com | vox | rigctl | none
+com_port      = COM5       ; ptt = com: the port that keys the radio (as Direwolf PTT)
+com_line      = rts        ; rts | dtr | both | -rts | -dtr | -both (- = inverted)
+; rigctl      = 127.0.0.1:4532 ; ptt = rigctl: rigctld
+; ptt_delay_ms = 50        ; PTT on -> audio
+tx_delay_ms   = 300        ; lead before the data, 250..2500 (radio fully on transmit)
+; ptt_tail_ms = 50
+; lead_tone   = yes        ; signature tone before every key-up: other modem73 stations see
+;                          ; the channel busy at once - lead at least 800 ms; no: tx_delay_ms
+csma_band     = vhf        ; vhf | hf - modem73's CSMA timing
+; csma_preset =            ; bench | relaxed | moderate | busy (empty: modem73's default)
+csma_burst    = 4          ; frames per key-up 1..4 - also the AX.25 window (maxframe)
+; control_port = 8073      ; modem73's JSON control port (loopback), 0 = off
+; extra_args  =            ; further modem73 options, space separated
+; log_output  = info       ; modem73's own lines in this log: info | debug | off
+;                          ; (TX/RX lines per frame only at debug)
 
 ; Per-profile overrides - only what differs, e.g.
 ; [tnc.tm-d710]            ; Kenwood TM-D710: kisshub.bat -p tm-d710

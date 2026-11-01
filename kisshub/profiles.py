@@ -261,8 +261,16 @@ DIREWOLF = Profile(name="direwolf", display="Direwolf", exit_kiss=False, kiss_pa
                    settle_sec=0.2, tcp_port=8001, reads_direwolf_conf=True,
                    notes="Direwolf KISS-TCP (KISSPORT), values from direwolf.conf")
 
+# modem73 (RFnexus, OFDM soundcard modem, kisshub/modem73.py): transparent KISS-TCP, so
+# no tunnel. kisshub starts it from [modem73] in kisshub.conf; air time, PACLEN and the
+# AX.25 recommendation follow from the mode there (config.py), not from these fields.
+# Port 8011: 8001 is Direwolf's KISS port, 8101 kisshub's own.
+MODEM73 = Profile(name="modem73", display="modem73", exit_kiss=False, kiss_params=False,
+                  settle_sec=0.2, tcp_port=8011,
+                  notes="modem73 KISS-TCP (port 8011), started by kisshub from [modem73]")
+
 PROFILES = {p.name: p for p in (PK232, TM_D710, TNC7MULTI, TH_D74, TH_D75, TNC2_KISS, GENERIC,
-                                VARA_FM, VARA_HF, DIREWOLF)}
+                                VARA_FM, VARA_HF, DIREWOLF, MODEM73)}
 
 
 def ax25_recommendation(p: Profile, air_baud: int = 1200) -> dict:

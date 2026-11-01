@@ -9,6 +9,7 @@ from pathlib import Path
 
 from prcore import direwolfconf, kiss, release, termcolor
 
+from . import modem73 as m73
 from .hub import HubCfg
 from .profiles import (PROFILES, TNC7_SWITCH, TUNNEL_MODES, Profile, ax25_recommendation,
                        with_hbaud, with_init_lines)
@@ -48,6 +49,12 @@ class Config:
     direwolf: str = ""                # CR70: what was read from direwolf.conf
     update_check: bool = True         # [update] check: GitHub once a day (PLANUNG 24)
     data_dir: Path = Path("data")     # only the update check's cache (release state)
+    modem73: m73.Modem73Cfg | None = None   # profile modem73: [modem73], kisshub starts it
+
+# profile modem73: every frame takes a fixed air time, whatever its length. The stations
+# estimate air time as txdelay + bytes * 8 / air_baud - with txdelay = lead + frame time
+# and this rate the bytes count for (almost) nothing, so one frame comes out right.
+MODEM73_AIR_BAUD = 1_000_000
 
 
 SECTIONS = ("tnc", "kiss", "ax25", "server", "log", "vara", "console", "update")
@@ -140,6 +147,24 @@ def load(path: str | Path, profile_name: str | None = None) -> Config:
     if transport == "tcp" and not 1 <= tport <= 65535:
         raise ConfigError("[tnc] port: the TCP port of the TNC")
 
+    mcfg = None
+    if profile.name == "modem73":
+        try:
+            mcfg = m73.load_section(cp, path.resolve().parent)
+        except ValueError as exc:
+            raise ConfigError(f"[modem73] {exc}") from None
+        if transport != "tcp":
+            raise ConfigError("[tnc] transport: tcp with profile modem73")
+        host = get("tnc", "host", "127.0.0.1")
+        if mcfg.start and host not in ("127.0.0.1", "localhost"):
+            raise ConfigError(f"[tnc] host = {host}: kisshub starts modem73 on this PC - "
+                              "127.0.0.1, or [modem73] start = no for a modem73 elsewhere")
+        for key in ("air_baud", "txdelay_ms"):
+            if cp.has_option("kiss", key):
+                raise ConfigError(f"[kiss] {key}: not with profile modem73 - the air time "
+                                  "follows from [modem73] modulation / code_rate / frame / "
+                                  "tx_delay_ms")
+
     send_params = get("kiss", "send_params", profile.kiss_params, bool)
     if send_params and not profile.kiss_params:
         raise ConfigError(f"[kiss] send_params: must be no with profile {profile.name} - "
@@ -158,9 +183,19 @@ def load(path: str | Path, profile_name: str | None = None) -> Config:
         sources[key] = f"profile {profile.name}"
         return profile_value
 
-    air_baud = radio("air_baud", profile.air_baud, dch.baud if dch else None)
-    txdelay_ms = radio("txdelay_ms", profile.txdelay_ms, dch.txdelay_ms if dch else None)
-    max_lead_ms = radio("max_lead_ms", profile.max_lead_ms, None)
+    if mcfg is not None:
+        air_baud = MODEM73_AIR_BAUD
+        txdelay_ms = mcfg.lead_ms + round(mcfg.frame_sec * 1000)
+        sources["air_baud"] = sources["txdelay_ms"] = f"modem73 {mcfg.mode}"
+        burst_ms = mcfg.lead_ms + mcfg.csma_burst * round(
+            (mcfg.frame_sec + m73.BURST_GAP_SEC) * 1000)
+        max_lead_ms = radio("max_lead_ms", burst_ms, None)
+        if sources["max_lead_ms"].startswith("profile"):
+            sources["max_lead_ms"] = f"modem73 burst {mcfg.csma_burst}"
+    else:
+        air_baud = radio("air_baud", profile.air_baud, dch.baud if dch else None)
+        txdelay_ms = radio("txdelay_ms", profile.txdelay_ms, dch.txdelay_ms if dch else None)
+        max_lead_ms = radio("max_lead_ms", profile.max_lead_ms, None)
     if profile.hbaud and not lines:          # TM-D710: air_baud goes to the TNC (HBAUD)
         try:
             profile = with_hbaud(profile, air_baud)
@@ -172,7 +207,7 @@ def load(path: str | Path, profile_name: str | None = None) -> Config:
         hints.append(f"[kiss] air_baud = {air_baud}: the {profile.display} modem has "
                      f"{' / '.join(map(str, profile.air_bauds))} Bd - other rates only with "
                      "the extra modem and a KISS switch position set up in Conf mode")
-    ax25 = ax25_recommendation(profile, air_baud)
+    ax25 = mcfg.ax25() if mcfg is not None else ax25_recommendation(profile, air_baud)
     if dw:                                   # Direwolf's own AX.25 values as the hint
         if dw.paclen:
             ax25["paclen"] = dw.paclen
@@ -180,7 +215,8 @@ def load(path: str | Path, profile_name: str | None = None) -> Config:
             ax25["maxframe"] = dw.maxframe
         if dw.emaxframe:
             ax25["maxframe_ext"] = dw.emaxframe
-    sources["ax25"] = "direwolf.conf" if dw else f"profile {profile.name}"
+    sources["ax25"] = ("direwolf.conf" if dw else f"modem73 {mcfg.mode}" if mcfg
+                       else f"profile {profile.name}")
     if cp.has_section("ax25"):
         for key in cp.options("ax25"):
             if key not in AX25_KEYS:
@@ -189,6 +225,10 @@ def load(path: str | Path, profile_name: str | None = None) -> Config:
             value = get("ax25", key, 0, int) if kind is int else _float(cp, key)
             if not lo <= value <= hi:
                 raise ConfigError(f"[ax25] {key}: {lo}..{hi}")
+            if key == "paclen" and mcfg is not None and value > mcfg.paclen():
+                raise ConfigError(f"[ax25] paclen = {value}: at most {mcfg.paclen()} with "
+                                  f"modem73 {mcfg.mode} ({mcfg.payload} bytes per frame "
+                                  f"minus {m73.HEADER_MAX} for the AX.25 header)")
             ax25[key] = value
         if cp.options("ax25"):
             sources["ax25"] += " + kisshub.conf [ax25]"
@@ -220,6 +260,8 @@ def load(path: str | Path, profile_name: str | None = None) -> Config:
                  air_baud=air_baud,
                  txdelay_sec=txdelay_ms / 1000,
                  max_lead_sec=max_lead_ms / 1000,
+                 frame_sec=(mcfg.frame_sec + m73.BURST_GAP_SEC) if mcfg else 0.0,
+                 max_frame=mcfg.payload if mcfg else 0,
                  status_every_sec=get("log", "status_every_sec", 600, int),
                  status_port=get("server", "status_port", port + 1, int),
                  profile=profile.name, sources=sources, ax25=ax25,
@@ -247,7 +289,8 @@ def load(path: str | Path, profile_name: str | None = None) -> Config:
                   log_file=named(get("log", "file", "")), trace=get("log", "trace", False, bool),
                   hints=tuple(hints), direwolf=dw.describe() if dw else "",
                   color=_color(get("console", "color", "auto")),
-                  update_check=_update(cp).check, data_dir=Path(path).resolve().parent / "data")
+                  update_check=_update(cp).check, data_dir=Path(path).resolve().parent / "data",
+                  modem73=mcfg)
 
 
 def _update(cp: configparser.ConfigParser) -> release.UpdateCfg:
@@ -282,6 +325,14 @@ def radio_lines(cfg: Config) -> list[tuple]:
               f"({src.get('ax25')}; for TinyBox and client)")]
     if cfg.direwolf:
         lines.insert(0, ("direwolf.conf", cfg.direwolf))
+    m = cfg.modem73
+    if m is not None:
+        lines[0] = ("Radio values", f"fixed per frame: {round(h.txdelay_sec * 1000)} ms "
+                                    f"(lead {m.lead_ms} + frame {round(m.frame_sec * 1000)}), "
+                                    f"max_lead {round(h.max_lead_sec * 1000)} ms "
+                                    f"({src.get('max_lead_ms')})")
+        lines.insert(0, ("modem73", m.describe(),
+                         f"({'started by kisshub: ' + m.exe if m.start else 'start = no'})"))
     p = cfg.tnc.profile
     if p.start_note:
         lines.insert(0, (p.display or p.name, p.start_note.format(

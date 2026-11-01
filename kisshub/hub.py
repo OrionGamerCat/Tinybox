@@ -125,6 +125,10 @@ class HubCfg:
     profile: str = "generic"
     sources: dict = field(default_factory=dict)   # value -> where it came from
     ax25: dict = field(default_factory=dict)      # AX.25 recommendation ([ax25] keys)
+    # profile modem73: fixed air time per frame (txdelay = lead + frame); a frame queued
+    # behind another goes out in the same key-up and adds frame_sec (frame + 200 ms gap)
+    frame_sec: float = 0.0           # 0 = air time by bytes (HDLC TNCs, VARA)
+    max_frame: int = 0               # longest frame the modem takes (0 = no limit)
 
 
 class Hub:
@@ -144,11 +148,13 @@ class Hub:
         self._tasks: list[asyncio.Task] = []
         self.dropped = 0
         self.invalid = 0                                # CR74: frames with a garbage address field
+        self.oversize = 0                               # modem73: longer than one modem frame
         self._names = itertools.count(1)
         # CR67: link quality from the frames passing the hub, VARA's own reports
         self.stats = LinkStats(airtime=self.airtime, on_closed=self._link_closed,
                                sn_window_sec=cfg.sn_window_sec)
         self.vara: VaraMonitor | None = None
+        self.modem73 = None                             # Modem73Process, set by __main__
         if cfg.vara_monitor:
             self.vara = VaraMonitor(cfg.vara_host, cfg.vara_cmd_port, clock=self.now,
                                     on_sn=self.stats.sn)
@@ -282,6 +288,14 @@ class Hub:
                 continue
             prio, _, frame, port, origin, queued = heapq.heappop(self._queue)
             now = self.now()
+            if self.cfg.max_frame and len(frame) > self.cfg.max_frame:
+                # modem73 would cut it - the other side would get a damaged frame
+                self.oversize += 1
+                self.dropped += 1
+                log.warning("frame of %d bytes dropped: the modem takes at most %d per "
+                            "frame - PACLEN of the station too large (%s)", len(frame),
+                            self.cfg.max_frame, origin.name if origin else "?")
+                continue
             if now - queued > self.cfg.stale_sec or not self.tnc.send_ax25(frame, port):
                 self.dropped += 1
                 continue
@@ -296,6 +310,8 @@ class Hub:
                 origin.air += air
             if self._busy_until <= now:
                 self._busy_until = now + air
+            elif self.cfg.frame_sec:                      # same key-up (modem73 burst)
+                self._busy_until += self.cfg.frame_sec
             else:
                 self._busy_until += air - self.cfg.txdelay_sec
             self._to_clients(port, frame, skip=origin)    # the others "hear" it
@@ -355,8 +371,9 @@ class Hub:
             "tnc": self.tnc.status(),
             "quality": self.stats.status(now),                       # CR67 B + C
             "vara": self.vara.status(now) if self.vara is not None else None,   # CR67 A
+            "modem73": self.modem73.status() if self.modem73 is not None else None,
             "queue": {"queued": queued, "wait_10min": waits, "dropped": self.dropped,
-                      "invalid": self.invalid,
+                      "invalid": self.invalid, "oversize": self.oversize,
                       "backlog_ms": max(0, round((self._busy_until - now) * 1000)),
                       "max_lead_ms": round(self.cfg.max_lead_sec * 1000)},
             "clients": [{"name": c.name, "since": c.since, "rx": c.rx, "tx": c.tx,

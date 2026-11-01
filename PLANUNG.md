@@ -1149,6 +1149,26 @@ immer frei** – dort hilft RTS/CTS nicht; laut Handbuch verlangt der D700 auße
 seriell (Menü 1–9–5 nicht ändern). Ein Profil `tm-d700` (Taktung durch den kisshub, gemessene
 effektive Rate statt 9600, Puffergröße messen) folgt nach Absprache mit OE3TEC.
 
+**modem73 als Modem (entschieden und umgesetzt 1.11.2026, kisshub 2026.11.01):** modem73
+(RFnexus, OFDM, 2400 Hz, Public Domain) als Alternative zu den KISS-TNCs auf 2 m/70 cm FM.
+Bewertung: transparentes KISS-TCP (kein Tunnel), Steuerport 8073 mit SNR/BER je Rahmen; aber
+feste Rahmenzeit je Frame, Abschneiden zu langer Frames, 1 s Sendesperre nach Empfang, nur
+Punkt-zu-Punkt zwischen modem73-Stationen. Windows: eigener Build des aktuellen Originals mit
+dünner Winsock-Schicht statt des veralteten `modem73-win` (`tools/modem73`, Gerhard: kein Pi
+nur für ein KISS-Modem). Entscheidung, Gerhard: eigene conf statt langer Kommandozeile, und
+zwar im kisshub (Variante b):
+- Profil `modem73`, Abschnitt `[modem73]` in der `kisshub.conf`; der kisshub startet modem73
+  (headless, eigene Prozessgruppe), wartet auf den KISS-Port (8011), leitet die Ausgabe ins
+  eigene Log, startet es nach einem Absturz neu und beendet es mit Strg+C.
+- Aus Modulation/Coderate/Rahmengröße berechnet (`kisshub/modem73.py`, Formel aus
+  `phy/common.hh`): Nutzlast und Rahmenzeit; daraus TXDELAY = Vorlauf + Rahmenzeit,
+  `air_baud` 1 000 000 (die Bytes zählen für die Stationen fast nichts), Burst-Folgerahmen
+  + Rahmenzeit + 200 ms, PACLEN = Nutzlast − 31, Fenster = `csma_burst`, T1 aus Antwortzeit.
+- Frames über der Nutzlast verwirft der Hub (`oversize`), statt sie abschneiden zu lassen.
+- Offen: Qualitätswerte vom Steuerport (SNR, BER, Pegel je Rahmen, PTT-Zeiten) wie
+  `varamon` in linkstats und Web-GUI; Bündeln mehrerer AX.25-Frames je OFDM-Rahmen;
+  Funktest OE3GAS ↔ OE3TEC. Bedienung: MANUAL 3.5a.
+
 ## 16. DX-Cluster-Feed `dxfeed` (entschieden 15.10.2026)
 
 - **Keine Live-Spots über Funk**, keine Dauerbeschallung: Der Spot-Strom wird gesammelt und **einmal täglich verdichtet**.

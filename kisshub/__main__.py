@@ -45,18 +45,43 @@ async def main(cfg) -> None:
 
     hub = Hub(cfg.hub, tnc_factory)
     hub.tnc.trace = cfg.trace
-    if sys.stdin is not None and sys.stdin.isatty():
-        Console(hub, LogControl(cfg.log_level, cfg.log_file)).start_stdin()
+    modem = supervisor = None
+    log = logging.getLogger("kisshub")
     watcher = None
-    if cfg.update_check:                     # PLANUNG 24: a log line, nothing else
-        watcher = asyncio.create_task(release.watch(
-            release_logger(), cache=cfg.data_dir / "kisshub-release.json", program="kisshub"))
     try:
+        if cfg.modem73 is not None and cfg.modem73.start:
+            from .modem73 import Modem73Process
+            modem = Modem73Process(cfg.modem73, t.port, t.host, restart_sec=t.reconnect_sec)
+            hub.modem73 = modem
+            try:
+                await modem.start()
+            except RuntimeError as exc:
+                log.error("%s", exc)
+                return
+            if await modem.wait_port():
+                log.info("modem73 ready on %s:%d", t.host, t.port, extra=termcolor.OK)
+            else:
+                log.warning("modem73: KISS port %s:%d not open after 30 s - see its lines "
+                            "above (audio device, COM port?); kisshub keeps trying",
+                            t.host, t.port)
+            supervisor = asyncio.create_task(modem.supervise())
+        if sys.stdin is not None and sys.stdin.isatty():
+            Console(hub, LogControl(cfg.log_level, cfg.log_file)).start_stdin()
+        if cfg.update_check:                 # PLANUNG 24: a log line, nothing else
+            watcher = asyncio.create_task(release.watch(
+                release_logger(), cache=cfg.data_dir / "kisshub-release.json",
+                program="kisshub"))
         await hub.run()
     finally:
         if watcher is not None:
             watcher.cancel()
-        await asyncio.shield(hub.stop())
+        try:
+            await asyncio.shield(hub.stop())
+        finally:
+            if modem is not None:
+                await asyncio.shield(modem.stop())     # PTT released, COM port closed
+            if supervisor is not None:
+                supervisor.cancel()
 
 
 def release_logger():
@@ -130,6 +155,7 @@ profiles:
   vara-fm    VARA FM, KISS-TCP 8100, connected mode tunnelled (both stations!)
   vara-hf    VARA HF, the same
   direwolf   Direwolf's KISSPORT, values from [tnc] direwolf_conf
+  modem73    modem73 OFDM modem (KISS-TCP 8011), kisshub starts it from [modem73]
 
 one kisshub.conf for all TNCs:
   -p PROFILE overrides [tnc] profile. A section [<section>.<profile>]
@@ -142,6 +168,7 @@ examples:
   kisshub.bat -p pk232
   kisshub.bat -p vara-fm
   kisshub.bat -p direwolf
+  kisshub.bat -p modem73
   python -m kisshub -c kisshub-test.conf -p generic
 
 While it runs, type H in the window for the console commands (S status,

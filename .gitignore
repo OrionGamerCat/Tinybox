@@ -49,3 +49,7 @@ desktop.ini
 
 # --- Produktions-Builds: lokal gebaut, Version per Git-Tag prod-<hash> -------
 production/
+
+# modem73 (tools/modem73): the exe and the build folder stay out of the repo
+modem73.exe
+tools/modem73/modem73/

@@ -232,7 +232,7 @@ air_baud    = 9600             ; 1200 (Standard) oder 9600 -> HBAUD
 
 | Abschnitt | Schlüssel | Bedeutung |
 |---|---|---|
-| `[tnc]` | `profile` | Standardprofil ohne `-p`: `pk232`, `tm-d710`, `tnc7multi`, `th-d74`, `th-d75`, `tnc2-kiss`, `generic`, `vara-fm`, `vara-hf`, `direwolf` |
+| `[tnc]` | `profile` | Standardprofil ohne `-p`: `pk232`, `tm-d710`, `tnc7multi`, `th-d74`, `th-d75`, `tnc2-kiss`, `generic`, `vara-fm`, `vara-hf`, `direwolf`, `modem73` |
 | | `transport` | `serial` \| `tcp` – Standard je Profil (tcp bei vara-*/direwolf) |
 | | `device`, `serial_baud` | nur seriell, z. B. `COM6` / `9600`, Raspberry Pi `/dev/ttyUSB0` |
 | | `host`, `port` | nur tcp; Standard 127.0.0.1, vara 8100, direwolf = KISSPORT |
@@ -259,6 +259,7 @@ air_baud    = 9600             ; 1200 (Standard) oder 9600 -> HBAUD
 | `th-d74`, `th-d75`, `tnc2-kiss`, `generic` | seriell/tcp, schon in KISS (kein Dialog) | 1200 | 300 | yes | 1500 | 1200-Bd-Werte |
 | `direwolf` | tcp, KISSPORT | aus MODEM | aus TXDELAY | no | 1500 | 1200-Bd-Werte |
 | `vara-fm`, `vara-hf` | tcp 8100, Tunnel | 350 | 2700 | **no** | 12000 | 256 B, Fenster 4, T1 18–90 s, T2 0,3 s |
+| `modem73` | tcp 8011, startet modem73 aus `[modem73]` (3.5a) | aus dem Modus (fest je Rahmen) | Vorlauf + Rahmenzeit | **no** | Burst | aus dem Modus: QAM16 1/2 short 223 B, Fenster 4, T1 10–60 s, T2 0,5 s |
 
 *1200-Bd-Werte:* paclen 256, Fenster 4 (Modulo 8) / 7 (Modulo 128), T1 3–30 s, T2 1,5 s.
 *9600-Bd-Werte* (Startwerte, am Funk noch zu prüfen): paclen 256, Fenster 7 / 7, T1 1,5–15 s, T2 0,5 s.
@@ -540,6 +541,69 @@ TX-Pegel des sendenden Geräts zu niedrig (Lauf 1: TS-790, 15 % Frameverlust).
 **Was zu erwarten ist** (18.10.2026, kurze Strecke, VHF): VARA FM Narrow über KISS ist
 verlustfrei, aber rund halb so schnell wie Direwolf 1200 Bd (22 gegen 40 B/s): VARA sendet
 KISS-Verkehr mit ~300–500 bit/s und 2–4 s Aufwand je Burst.
+
+### 3.5a KISS mit modem73 (OFDM, PLANUNG 15)
+
+modem73 (RFnexus, Public Domain) ist ein OFDM-Soundkarten-Modem mit 2400 Hz Bandbreite und
+transparentem KISS-TCP: SABM, I, RR gehen unverändert durch – kein Tunnel wie bei VARA. Der
+kisshub **startet modem73 selbst** aus dem Abschnitt `[modem73]` der `kisshub.conf` und beendet
+es mit Strg+C wieder.
+
+**Vorher:**
+- `modem73.exe` bauen bzw. holen: `tools/modem73/README.md`. Pfad in `[modem73] exe`.
+- **Direwolf beenden** – modem73 braucht die Soundkarte für sich.
+- **Beide Stationen** brauchen modem73 + kisshub; 1200-Bd-Stationen und Digis hören es nicht.
+  Eigene Frequenz verwenden.
+- Soundkartennamen: `modem73.exe --list-audio`.
+
+**kisshub.conf** (beide PCs, je mit eigenem Rufzeichen und Geräten):
+
+```ini
+[modem73]
+callsign      = OE3GAS          ; ohne SSID - steht in jedem OFDM-Rahmen
+exe           = C:\modem73\modem73.exe
+modulation    = QAM16
+code_rate     = 1/2
+frame         = short           ; 254 B je Rahmen in 0,96 s
+input_device  = <Name aus --list-audio>
+output_device = <Name aus --list-audio>
+tx_level      = 60
+ptt           = com
+com_port      = COM5            ; der Port, der bisher bei Direwolf die PTT schaltet
+com_line      = rts
+tx_delay_ms   = 300
+csma_band     = vhf
+csma_burst    = 4
+```
+
+Start: `kisshub.bat -p modem73`. Die Startzeilen zeigen modem73 mit Modus, Nutzlast und
+Rahmenzeit, die festen Sendezeiten und die AX.25-Empfehlung; danach die Startzeilen von
+modem73 selbst (Soundkarte, PTT, Port 8011) und `modem73 ready on 127.0.0.1:8011`. Endet
+modem73 von selbst, startet der kisshub es nach `reconnect_sec` neu. Log: `kisshub-modem73.log`.
+
+**Was der kisshub aus dem Modus ableitet** – nichts davon von Hand eintragen:
+- Jeder Rahmen kostet seine volle Zeit, egal wie lang er ist (ein RR so viel wie ein I-Frame).
+  Sendezeit je Rahmen = Vorlauf (PTT-Verzögerung + TX-Delay, mit Vorlaufton mindestens
+  800 ms) + Rahmenzeit; weitere Rahmen derselben Tastung + Rahmenzeit + 200 ms.
+- **PACLEN** = Nutzlast − 31 Byte AX.25-Kopf (QAM16 1/2 short: 223). Ein längerer Frame würde
+  von modem73 abgeschnitten; der kisshub verwirft ihn mit Warnung (`oversize` im Status).
+- Fenster = `csma_burst`, T1 ab 10 s (QAM16 1/2 short), T2 0,5 s.
+- `[kiss] air_baud` / `txdelay_ms` werden abgewiesen; `[ax25]` darf PACLEN nur verkleinern.
+
+**TinyBox / Client:** wie immer bei KISS nur `[radio] interface = kiss`, `[kiss] port = 8101`,
+`[ax25] version = 2.2` – die Werte kommen vom kisshub.
+
+**Modi** (Nutzlast je Rahmen / Rahmenzeit, aus modem73 2.4.8 berechnet):
+
+| Modus | Nutzlast | Zeit | Hinweis |
+|---|---|---|---|
+| QPSK 1/2 short | 126 B | 0,96 s | robust, PACLEN 95 |
+| QAM16 1/2 short | 254 B | 0,96 s | Standard für FM, PACLEN 223 |
+| QAM16 3/4 short | 382 B | 0,96 s | gutes Signal; PACLEN bleibt 256 (Grenze der Stationen) |
+| QPSK 1/2 normal | 510 B | 2,60 s | modem73-Standard – für AX.25 ungünstig (RR 2,6 s) |
+
+`lead_tone = no` spart je Tastung rund 0,5 s, andere modem73-Stationen erkennen den belegten
+Kanal dann aber erst am Signal selbst.
 
 ### 3.6 Connect über Digipeater (Client, CR71)
 

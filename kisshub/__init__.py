@@ -12,6 +12,7 @@ docs/kiss-mode-konzept.md section 4, PLANUNG.md section 15.
     console.py    commands in the kisshub window: LOG MARK/DEBUG/TRACE, TXDELAY, LINKS ...
     linkstats.py  passive AX.25 link quality per station pair (CR67) - any TNC
     varamon.py    VARA's command port, read only: PTT, BUSY, SN, alarms (CR67)
+    modem73.py    modem73 (OFDM): mode table, [modem73], starts/stops the modem73 process
 """
 
-VERSION = "2026.10.29"
+VERSION = "2026.11.01"
