@@ -54,6 +54,7 @@ pi_sd_vorbereiten.py
 fwdsim
 fwdsim.conf.example
 tbtest
+tools
 kisshub
 kisshub.conf.example
 brocast/brocast-core.v*

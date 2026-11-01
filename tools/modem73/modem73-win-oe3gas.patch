@@ -1,0 +1,1010 @@
+diff -ruN -x '*.exe' -x .git -x pdcurses -x hidapi modem73/control_port.hh port/control_port.hh
+--- modem73/control_port.hh	2026-11-01 20:32:47.516690846 +0100
++++ port/control_port.hh	2026-11-01 21:26:17.841667597 +0100
+@@ -11,16 +11,7 @@
+ #include <iostream>
+ #include <chrono>
+ 
+-#include <sys/socket.h>
+-#ifndef MSG_NOSIGNAL
+-#define MSG_NOSIGNAL 0
+-#endif
+-#include <netinet/in.h>
+-#include <netinet/tcp.h>
+-#include <arpa/inet.h>
+-#include <unistd.h>
+-#include <fcntl.h>
+-#include <poll.h>
++#include "net_compat.hh"
+ 
+ extern "C" {
+ #include "deps/cJSON.h"
+@@ -124,7 +115,7 @@
+         addr.sin_family = AF_INET;
+         if (inet_pton(AF_INET, bind_address_.c_str(), &addr.sin_addr) != 1) {
+             std::cerr << "control: invalid bind address " << bind_address_ << std::endl;
+-            close(server_fd_);
++            sock_close(server_fd_);
+             server_fd_ = -1;
+             return false;
+         }
+@@ -132,14 +123,14 @@
+ 
+         if (bind(server_fd_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+             std::cerr << "control: Failed to bind to port " << port_ << std::endl;
+-            close(server_fd_);
++            sock_close(server_fd_);
+             server_fd_ = -1;
+             return false;
+         }
+ 
+         if (listen(server_fd_, 5) < 0) {
+             std::cerr << "control: Failed to listen" << std::endl;
+-            close(server_fd_);
++            sock_close(server_fd_);
+             server_fd_ = -1;
+             return false;
+         }
+@@ -159,7 +150,7 @@
+             thread_.join();
+         }
+         if (server_fd_ >= 0) {
+-            close(server_fd_);
++            sock_close(server_fd_);
+             server_fd_ = -1;
+         }
+     }
+@@ -249,13 +240,13 @@
+                         it->recv_buf.insert(it->recv_buf.end(), buf, buf + n);
+                         if (!process_recv_buf(*it, pending)) {
+                             std::cerr << "control: Client disconnected" << std::endl;
+-                            close(it->fd);
++                            sock_close(it->fd);
+                             it = clients_.erase(it);
+                             continue;
+                         }
+                     } else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+                         std::cerr << "control: Client disconnected" << std::endl;
+-                        close(it->fd);
++                        sock_close(it->fd);
+                         it = clients_.erase(it);
+                         continue;
+                     }
+@@ -273,7 +264,7 @@
+         {
+             std::lock_guard<std::recursive_mutex> lock(clients_mutex_);
+             for (auto& client : clients_) {
+-                close(client.fd);
++                sock_close(client.fd);
+             }
+             clients_.clear();
+         }
+diff -ruN -x '*.exe' -x .git -x pdcurses -x hidapi modem73/kiss_tnc.cc port/kiss_tnc.cc
+--- modem73/kiss_tnc.cc	2026-11-01 20:32:47.524091368 +0100
++++ port/kiss_tnc.cc	2026-11-01 21:26:17.842286774 +0100
+@@ -461,7 +461,7 @@
+             if (i + 1 < argc && argv[i + 1][0] != '-') {
+                 config.config_file = argv[++i];
+             } else {
+-                const char* home = getenv("HOME");
++                const char* home = m73_home();
+                 if (home) {
+                     config.config_file = std::string(home) + "/.config/modem73/settings";
+                 }
+@@ -821,7 +821,9 @@
+ 
+     signal(SIGINT, signal_handler);
+     signal(SIGTERM, signal_handler);
++#ifndef _WIN32
+     signal(SIGPIPE, SIG_IGN);
++#endif
+     arm_shutdown_deadline(10000);
+ 
+     if (!g_use_ui) {
+@@ -829,7 +831,7 @@
+         if (cli_config && !config.config_file.empty()) {
+             settings_path = config.config_file;
+         } else {
+-            const char* home = getenv("HOME");
++            const char* home = m73_home();
+             if (home) settings_path = std::string(home) + "/.config/modem73/settings";
+         }
+         if (!settings_path.empty()) {
+@@ -847,7 +849,7 @@
+         g_ui_state = &ui_state;
+         
+         // Set up config file path
+-        const char* home = getenv("HOME");
++        const char* home = m73_home();
+         if (home) {
+             std::string config_dir = std::string(home) + "/.config/modem73";
+             mkdir(config_dir.c_str(), 0755);
+diff -ruN -x '*.exe' -x .git -x pdcurses -x hidapi modem73/kiss_tnc_impl.hh port/kiss_tnc_impl.hh
+--- modem73/kiss_tnc_impl.hh	2026-11-01 20:32:47.524091368 +0100
++++ port/kiss_tnc_impl.hh	2026-11-01 21:26:17.841223904 +0100
+@@ -22,17 +22,7 @@
+ #include <cctype>
+ 
+ // Network
+-#include <sys/socket.h>
+-#ifndef MSG_NOSIGNAL
+-#define MSG_NOSIGNAL 0
+-#endif
+-#include <sys/stat.h>
+-#include <netinet/in.h>
+-#include <netinet/tcp.h>
+-#include <arpa/inet.h>
+-#include <unistd.h>
+-#include <fcntl.h>
+-#include <poll.h>
++#include "net_compat.hh"
+ 
+ // Local includes
+ #include "kiss_tnc.hh"
+@@ -106,13 +96,13 @@
+     memset(&addr, 0, sizeof(addr));
+     addr.sin_family = AF_INET;
+     if (inet_pton(AF_INET, bind_address.c_str(), &addr.sin_addr) != 1) {
+-        close(sock);
++        sock_close(sock);
+         return false;
+     }
+     addr.sin_port = htons(port);
+ 
+     int result = bind(sock, (struct sockaddr*)&addr, sizeof(addr));
+-    close(sock);
++    sock_close(sock);
+ 
+     return result == 0;
+ }
+@@ -378,18 +368,18 @@
+         memset(&addr, 0, sizeof(addr));
+         addr.sin_family = AF_INET;
+         if (inet_pton(AF_INET, config_.bind_address.c_str(), &addr.sin_addr) != 1) {
+-            close(server_fd_);
++            sock_close(server_fd_);
+             throw std::runtime_error("Invalid bind address: " + config_.bind_address);
+         }
+         addr.sin_port = htons(config_.port);
+ 
+         if (bind(server_fd_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+-            close(server_fd_);
++            sock_close(server_fd_);
+             throw std::runtime_error("Failed to bind to port " + std::to_string(config_.port));
+         }
+         
+         if (listen(server_fd_, 5) < 0) {
+-            close(server_fd_);
++            sock_close(server_fd_);
+             throw std::runtime_error("Failed to listen");
+         }
+         
+@@ -484,7 +474,7 @@
+                     std::lock_guard<std::mutex> lock(clients_mutex_);
+                     if (clients_.size() >= MAX_CLIENTS) {
+                         ui_log("KISS: client limit reached, rejecting connection");
+-                        close(client_fd);
++                        sock_close(client_fd);
+                         client_fd = -1;
+                     }
+                 }
+@@ -529,7 +519,7 @@
+                     } else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+                         // Disconnected
+                         ui_log("Client disconnected");
+-                        close(client->fd);
++                        sock_close(client->fd);
+                         it = clients_.erase(it);
+ #ifdef WITH_UI
+                         if (g_ui_state) {
+@@ -542,7 +532,7 @@
+                     // Flush write buffer
+                     if (!client->flush()) {
+                         ui_log("Client write error, disconnecting");
+-                        close(client->fd);
++                        sock_close(client->fd);
+                         it = clients_.erase(it);
+ #ifdef WITH_UI
+                         if (g_ui_state) {
+@@ -572,9 +562,9 @@
+         set_ptt(false);
+ 
+         for (auto& client : clients_) {
+-            close(client->fd);
++            sock_close(client->fd);
+         }
+-        close(server_fd_);
++        sock_close(server_fd_);
+     }
+     
+ private:
+diff -ruN -x '*.exe' -x .git -x pdcurses -x hidapi modem73/net_compat.hh port/net_compat.hh
+--- modem73/net_compat.hh	1970-01-01 01:00:00.000000000 +0100
++++ port/net_compat.hh	2026-11-01 21:26:43.472809037 +0100
+@@ -0,0 +1,146 @@
++// net_compat.hh - POSIX socket/file shims so upstream modem73 builds on Windows
++// (MinGW-w64). On Linux/macOS it only pulls in the usual POSIX headers.
++#pragma once
++
++#ifdef _WIN32
++#ifndef _WIN32_WINNT
++#define _WIN32_WINNT 0x0601          // Windows 7+: WSAPoll, inet_pton
++#endif
++#ifndef NOMINMAX
++#define NOMINMAX
++#endif
++#ifndef WIN32_LEAN_AND_MEAN
++#define WIN32_LEAN_AND_MEAN
++#endif
++#include <winsock2.h>
++#include <ws2tcpip.h>
++#include <windows.h>
++#include <io.h>
++#include <direct.h>
++#include <sys/stat.h>
++#include <cerrno>
++#include <ctime>
++#include <cstdlib>
++#include <string>
++#include <unistd.h>
++// windows.h macros that clash with aicodix template parameters
++#undef IN
++#undef OUT
++#undef ERROR
++
++#ifndef MSG_NOSIGNAL
++#define MSG_NOSIGNAL 0
++#endif
++#ifndef MSG_DONTWAIT
++#define MSG_DONTWAIT 0x40000000      // handled in m73_recv/m73_send below
++#endif
++#ifndef F_GETFL
++#define F_GETFL 3
++#endif
++#ifndef F_SETFL
++#define F_SETFL 4
++#endif
++#ifndef O_NONBLOCK
++#define O_NONBLOCK 0x4000
++#endif
++#ifndef EINPROGRESS
++#define EINPROGRESS 112
++#endif
++
++// Winsock reports through WSAGetLastError, upstream checks errno
++inline void m73_wsa_errno() {
++    int e = WSAGetLastError();
++    errno = (e == WSAEWOULDBLOCK) ? EWOULDBLOCK
++          : (e == WSAEINPROGRESS) ? EINPROGRESS
++          : (e == WSAEINTR) ? EINTR : EIO;
++}
++inline bool m73_readable_now(int fd) {
++    WSAPOLLFD p{}; p.fd = (SOCKET)fd; p.events = POLLRDNORM;
++    return WSAPoll(&p, 1, 0) > 0;
++}
++inline ssize_t m73_recv(int fd, void* buf, size_t len, int flags) {
++    if ((flags & MSG_DONTWAIT) && !m73_readable_now(fd)) { errno = EWOULDBLOCK; return -1; }
++    int n = ::recv((SOCKET)fd, (char*)buf, (int)len, flags & ~(MSG_DONTWAIT | MSG_NOSIGNAL));
++    if (n < 0) m73_wsa_errno();
++    return n;
++}
++inline ssize_t m73_send(int fd, const void* buf, size_t len, int flags) {
++    int n = ::send((SOCKET)fd, (const char*)buf, (int)len, flags & ~(MSG_DONTWAIT | MSG_NOSIGNAL));
++    if (n < 0) m73_wsa_errno();
++    return n;
++}
++inline int m73_connect(int fd, const sockaddr* a, int alen) {
++    int r = ::connect((SOCKET)fd, a, alen);
++    if (r < 0) { m73_wsa_errno(); if (errno == EWOULDBLOCK) errno = EINPROGRESS; }
++    return r;
++}
++inline int m73_accept(int fd, sockaddr* a, socklen_t* alen) {
++    SOCKET s = ::accept((SOCKET)fd, a, alen);
++    if (s == INVALID_SOCKET) { m73_wsa_errno(); return -1; }
++    return (int)s;
++}
++inline int m73_socket(int af, int type, int proto) {
++    SOCKET s = ::socket(af, type, proto);
++    return s == INVALID_SOCKET ? -1 : (int)s;
++}
++// fcntl() is only used on sockets in the network code: O_NONBLOCK on/off
++inline int m73_fcntl(int fd, int cmd, int flags = 0) {
++    if (cmd == F_GETFL) return 0;
++    u_long nb = (flags & O_NONBLOCK) ? 1 : 0;
++    return ioctlsocket((SOCKET)fd, FIONBIO, &nb) == 0 ? 0 : -1;
++}
++inline int m73_setsockopt(int fd, int lvl, int name, const void* v, socklen_t l) {
++    // SO_REUSEADDR on Windows lets two programs share a port - use exclusive use
++    if (lvl == SOL_SOCKET && name == SO_REUSEADDR) name = SO_EXCLUSIVEADDRUSE;
++    return ::setsockopt((SOCKET)fd, lvl, name, (const char*)v, l);
++}
++inline int m73_poll(WSAPOLLFD* p, unsigned long n, int ms) { return WSAPoll(p, n, ms); }
++inline int sock_close(int fd) { return closesocket((SOCKET)fd); }
++inline int m73_getsockopt(int fd, int lvl, int name, void* v, socklen_t* l) {
++    return ::getsockopt((SOCKET)fd, lvl, name, (char*)v, l);
++}
++inline struct tm* localtime_r(const time_t* t, struct tm* out) {
++    return localtime_s(out, t) == 0 ? out : nullptr;
++}
++inline int m73_mkdir(const char* p, int) { return _mkdir(p); }
++
++// config dir: %APPDATA% stands in for $HOME (".config/modem73" below it)
++inline const char* m73_home() {
++    const char* h = std::getenv("APPDATA");
++    return h ? h : std::getenv("USERPROFILE");
++}
++
++struct M73WinsockInit {
++    M73WinsockInit() { WSADATA d; WSAStartup(MAKEWORD(2, 2), &d); }
++    ~M73WinsockInit() { WSACleanup(); }
++};
++inline M73WinsockInit m73_winsock_init_;
++
++#define recv(...)       m73_recv(__VA_ARGS__)
++#define send(...)       m73_send(__VA_ARGS__)
++#define connect(...)    m73_connect(__VA_ARGS__)
++#define accept(...)     m73_accept(__VA_ARGS__)
++#define socket(...)     m73_socket(__VA_ARGS__)
++#define fcntl(...)      m73_fcntl(__VA_ARGS__)
++#define setsockopt(...) m73_setsockopt(__VA_ARGS__)
++#define getsockopt(...) m73_getsockopt(__VA_ARGS__)
++#define poll(...)       m73_poll(__VA_ARGS__)
++#define mkdir(p, m)     m73_mkdir(p, m)
++
++#else  // POSIX
++#include <sys/socket.h>
++#include <sys/stat.h>
++#include <netinet/in.h>
++#include <netinet/tcp.h>
++#include <arpa/inet.h>
++#include <netdb.h>
++#include <unistd.h>
++#include <fcntl.h>
++#include <poll.h>
++#include <cstdlib>
++#ifndef MSG_NOSIGNAL
++#define MSG_NOSIGNAL 0
++#endif
++inline int sock_close(int fd) { return ::close(fd); }
++inline const char* m73_home() { return std::getenv("HOME"); }
++#endif
+diff -ruN -x '*.exe' -x .git -x pdcurses -x hidapi modem73/perf_log.hh port/perf_log.hh
+--- modem73/perf_log.hh	2026-11-01 20:32:47.529957112 +0100
++++ port/perf_log.hh	2026-11-01 21:26:17.842739430 +0100
+@@ -9,7 +9,7 @@
+ #include <cstdio>
+ #include <ctime>
+ #include <cstdlib>
+-#include <sys/stat.h>
++#include "net_compat.hh"
+ 
+ struct PerfModeStats {
+     std::string mode;
+@@ -33,7 +33,7 @@
+     }
+ 
+     static std::string default_path() {
+-        const char* home = getenv("HOME");
++        const char* home = m73_home();
+         return std::string(home ? home : ".") + "/.config/modem73/perf.csv";
+     }
+ 
+@@ -88,7 +88,7 @@
+         if (csv_)
+             return true;
+         path_ = default_path();
+-        const char* home = getenv("HOME");
++        const char* home = m73_home();
+         if (home) {
+             mkdir((std::string(home) + "/.config").c_str(), 0755);
+             mkdir((std::string(home) + "/.config/modem73").c_str(), 0755);
+diff -ruN -x '*.exe' -x .git -x pdcurses -x hidapi modem73/rigctl_ptt.hh port/rigctl_ptt.hh
+--- modem73/rigctl_ptt.hh	2026-11-01 20:32:47.530204565 +0100
++++ port/rigctl_ptt.hh	2026-11-01 21:26:43.473412682 +0100
+@@ -5,15 +5,7 @@
+ #include <cstring>
+ #include <chrono>
+ #include <mutex>
+-#include <sys/socket.h>
+-#ifndef MSG_NOSIGNAL
+-#define MSG_NOSIGNAL 0
+-#endif
+-#include <netinet/in.h>
+-#include <arpa/inet.h>
+-#include <unistd.h>
+-#include <netdb.h>
+-#include <poll.h>
++#include "net_compat.hh"
+ 
+ class RigctlPTT {
+ public:
+@@ -91,7 +83,11 @@
+         // Read response with timeout
+         std::string result;
+         char buf[1024];
++        #ifdef _WIN32
++        WSAPOLLFD pfd{}; pfd.fd = (SOCKET)sock_; pfd.events = POLLRDNORM;
++#else
+         struct pollfd pfd = {sock_, POLLIN, 0};
++#endif
+ 
+         while (true) {
+             int ready = poll(&pfd, 1, 500);
+@@ -131,7 +127,7 @@
+         struct hostent* server = gethostbyname(host_.c_str());
+         if (!server) {
+             std::cerr << "rigctl PTT: Can't connect to host " << host_ << std::endl;
+-            close(sock_);
++            sock_close(sock_);
+             sock_ = -1;
+             return false;
+         }
+@@ -161,7 +157,7 @@
+         }
+         if (rc < 0) {
+             std::cerr << "rigctl: Can't connect to " << host_ << ":" << port_ << std::endl;
+-            close(sock_);
++            sock_close(sock_);
+             sock_ = -1;
+             return false;
+         }
+@@ -183,7 +179,7 @@
+         if (sock_ >= 0) {
+             if (ptt_on_)
+                 send(sock_, "T 0\n", 4, MSG_NOSIGNAL | MSG_DONTWAIT);
+-            close(sock_);
++            sock_close(sock_);
+             sock_ = -1;
+         }
+         connected_ = false;
+diff -ruN -x '*.exe' -x .git -x pdcurses -x hidapi modem73/serial_ptt.hh port/serial_ptt.hh
+--- modem73/serial_ptt.hh	2026-11-01 20:32:47.530204565 +0100
++++ port/serial_ptt.hh	2026-11-01 21:26:28.261277265 +0100
+@@ -1,165 +1,7 @@
+ #pragma once
+-
+-#include <string>
+-#include <fcntl.h>
+-#include <unistd.h>
+-#include <sys/ioctl.h>
+-#include <termios.h>
+-#include <cerrno>
+-#include <cstring>
+-
+-enum class PTTLine {
+-    DTR = 0,
+-    RTS = 1,
+-    BOTH = 2
+-};
+-
+-class SerialPTT {
+-public:
+-    SerialPTT() = default;
+-    
+-    ~SerialPTT() {
+-        close();
+-    }
+-
+-    
+-    
+-    bool open(const std::string& port, PTTLine line = PTTLine::RTS, 
+-              bool invert_dtr = false, bool invert_rts = false) {
+-        close();
+-        
+-        port_ = port;
+-        line_ = line;
+-        invert_dtr_ = invert_dtr;
+-        invert_rts_ = invert_rts;
+-        
+-        fd_ = ::open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
+-        if (fd_ < 0) {
+-            last_error_ = std::string("Failed to open ") + port + ": " + strerror(errno);
+-            return false;
+-        }
+-        
+-        struct termios tty;
+-        if (tcgetattr(fd_, &tty) != 0) {
+-            last_error_ = "Failed to get terminal attributes";
+-            close();
+-            return false;
+-        }
+-        
+-        cfmakeraw(&tty);
+-        tcsetattr(fd_, TCSANOW, &tty);
+-
+-        int clear = (invert_dtr_ ? 0 : TIOCM_DTR) | (invert_rts_ ? 0 : TIOCM_RTS);
+-        int set = (invert_dtr_ ? TIOCM_DTR : 0) | (invert_rts_ ? TIOCM_RTS : 0);
+-        if (clear) ioctl(fd_, TIOCMBIC, &clear);
+-        if (set) ioctl(fd_, TIOCMBIS, &set);
+-
+-        ptt_off();
+-        
+-
+-
+-
+-        open_ = true;
+-        return true;
+-    }
+-
+-    
+-    void close() {
+-        if (fd_ >= 0) {
+-            ptt_off();
+-            ::close(fd_);
+-            fd_ = -1;
+-        }
+-        open_ = false;
+-    }
+-
+-    
+-    bool is_open() const { return open_; }
+-    
+-    const std::string& last_error() const { return last_error_; }
+-    
+-    bool ptt_on() {
+-        if (fd_ < 0) return false;
+-
+-        int flags;
+-        if (ioctl(fd_, TIOCMGET, &flags) < 0) return false;
+-        
+-
+-
+-
+-
+-        if (line_ == PTTLine::DTR || line_ == PTTLine::BOTH) {
+-            if (invert_dtr_) {
+-                flags &= ~TIOCM_DTR;  // clear DTR 
+-            } else {
+-                flags |= TIOCM_DTR;   // set DTR 
+-            }
+-        }
+-        
+-
+-
+-
+-        if (line_ == PTTLine::RTS || line_ == PTTLine::BOTH) {
+-            if (invert_rts_) {
+-                flags &= ~TIOCM_RTS;  // clear RTS
+-            } else {
+-                flags |= TIOCM_RTS;   // set RTS
+-            }
+-        }
+-
+-
+-
+-        return ioctl(fd_, TIOCMSET, &flags) == 0;
+-    }
+-
+-    bool ptt_off() {
+-        if (fd_ < 0) return true;
+-
+-        int flags;
+-        if (ioctl(fd_, TIOCMGET, &flags) < 0) return false;
+-        
+-
+-
+-        if (line_ == PTTLine::DTR || line_ == PTTLine::BOTH) {
+-            if (invert_dtr_) {
+-                flags |= TIOCM_DTR;   // set DTR
+-            } else {
+-                flags &= ~TIOCM_DTR;  // clear DTR 
+-            }
+-        }
+-        
+-
+-
+-        if (line_ == PTTLine::RTS || line_ == PTTLine::BOTH) {
+-            if (invert_rts_) {
+-                flags |= TIOCM_RTS;   // set RTS
+-            } else {
+-                flags &= ~TIOCM_RTS;  // clear RTS
+-            }
+-        }
+-
+-
+-
+-        return ioctl(fd_, TIOCMSET, &flags) == 0;
+-    }
+-
+-    bool reconnect() {
+-        std::string saved_port = port_;
+-        PTTLine saved_line = line_;
+-        bool saved_invert_dtr = invert_dtr_;
+-        bool saved_invert_rts = invert_rts_;
+-        
+-        close();
+-        return open(saved_port, saved_line, saved_invert_dtr, saved_invert_rts);
+-    }
+-
+-
+-private:
+-    int fd_ = -1;
+-    bool open_ = false;
+-    std::string port_;
+-    PTTLine line_ = PTTLine::RTS;
+-    bool invert_dtr_ = false;
+-    bool invert_rts_ = false;
+-    std::string last_error_;
+-};
++#ifdef _WIN32
++#include "net_compat.hh"
++#include "serial_ptt_win.hh"
++#else
++#include "serial_ptt_posix.hh"
++#endif
+diff -ruN -x '*.exe' -x .git -x pdcurses -x hidapi modem73/serial_ptt_posix.hh port/serial_ptt_posix.hh
+--- modem73/serial_ptt_posix.hh	1970-01-01 01:00:00.000000000 +0100
++++ port/serial_ptt_posix.hh	2026-11-01 21:24:55.735712409 +0100
+@@ -0,0 +1,165 @@
++#pragma once
++
++#include <string>
++#include <fcntl.h>
++#include <unistd.h>
++#include <sys/ioctl.h>
++#include <termios.h>
++#include <cerrno>
++#include <cstring>
++
++enum class PTTLine {
++    DTR = 0,
++    RTS = 1,
++    BOTH = 2
++};
++
++class SerialPTT {
++public:
++    SerialPTT() = default;
++    
++    ~SerialPTT() {
++        close();
++    }
++
++    
++    
++    bool open(const std::string& port, PTTLine line = PTTLine::RTS, 
++              bool invert_dtr = false, bool invert_rts = false) {
++        close();
++        
++        port_ = port;
++        line_ = line;
++        invert_dtr_ = invert_dtr;
++        invert_rts_ = invert_rts;
++        
++        fd_ = ::open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
++        if (fd_ < 0) {
++            last_error_ = std::string("Failed to open ") + port + ": " + strerror(errno);
++            return false;
++        }
++        
++        struct termios tty;
++        if (tcgetattr(fd_, &tty) != 0) {
++            last_error_ = "Failed to get terminal attributes";
++            close();
++            return false;
++        }
++        
++        cfmakeraw(&tty);
++        tcsetattr(fd_, TCSANOW, &tty);
++
++        int clear = (invert_dtr_ ? 0 : TIOCM_DTR) | (invert_rts_ ? 0 : TIOCM_RTS);
++        int set = (invert_dtr_ ? TIOCM_DTR : 0) | (invert_rts_ ? TIOCM_RTS : 0);
++        if (clear) ioctl(fd_, TIOCMBIC, &clear);
++        if (set) ioctl(fd_, TIOCMBIS, &set);
++
++        ptt_off();
++        
++
++
++
++        open_ = true;
++        return true;
++    }
++
++    
++    void close() {
++        if (fd_ >= 0) {
++            ptt_off();
++            ::close(fd_);
++            fd_ = -1;
++        }
++        open_ = false;
++    }
++
++    
++    bool is_open() const { return open_; }
++    
++    const std::string& last_error() const { return last_error_; }
++    
++    bool ptt_on() {
++        if (fd_ < 0) return false;
++
++        int flags;
++        if (ioctl(fd_, TIOCMGET, &flags) < 0) return false;
++        
++
++
++
++
++        if (line_ == PTTLine::DTR || line_ == PTTLine::BOTH) {
++            if (invert_dtr_) {
++                flags &= ~TIOCM_DTR;  // clear DTR 
++            } else {
++                flags |= TIOCM_DTR;   // set DTR 
++            }
++        }
++        
++
++
++
++        if (line_ == PTTLine::RTS || line_ == PTTLine::BOTH) {
++            if (invert_rts_) {
++                flags &= ~TIOCM_RTS;  // clear RTS
++            } else {
++                flags |= TIOCM_RTS;   // set RTS
++            }
++        }
++
++
++
++        return ioctl(fd_, TIOCMSET, &flags) == 0;
++    }
++
++    bool ptt_off() {
++        if (fd_ < 0) return true;
++
++        int flags;
++        if (ioctl(fd_, TIOCMGET, &flags) < 0) return false;
++        
++
++
++        if (line_ == PTTLine::DTR || line_ == PTTLine::BOTH) {
++            if (invert_dtr_) {
++                flags |= TIOCM_DTR;   // set DTR
++            } else {
++                flags &= ~TIOCM_DTR;  // clear DTR 
++            }
++        }
++        
++
++
++        if (line_ == PTTLine::RTS || line_ == PTTLine::BOTH) {
++            if (invert_rts_) {
++                flags |= TIOCM_RTS;   // set RTS
++            } else {
++                flags &= ~TIOCM_RTS;  // clear RTS
++            }
++        }
++
++
++
++        return ioctl(fd_, TIOCMSET, &flags) == 0;
++    }
++
++    bool reconnect() {
++        std::string saved_port = port_;
++        PTTLine saved_line = line_;
++        bool saved_invert_dtr = invert_dtr_;
++        bool saved_invert_rts = invert_rts_;
++        
++        close();
++        return open(saved_port, saved_line, saved_invert_dtr, saved_invert_rts);
++    }
++
++
++private:
++    int fd_ = -1;
++    bool open_ = false;
++    std::string port_;
++    PTTLine line_ = PTTLine::RTS;
++    bool invert_dtr_ = false;
++    bool invert_rts_ = false;
++    std::string last_error_;
++};
+diff -ruN -x '*.exe' -x .git -x pdcurses -x hidapi modem73/serial_ptt_win.hh port/serial_ptt_win.hh
+--- modem73/serial_ptt_win.hh	1970-01-01 01:00:00.000000000 +0100
++++ port/serial_ptt_win.hh	2026-11-01 21:26:28.257503518 +0100
+@@ -0,0 +1,203 @@
++#pragma once
++
++#include <string>
++#include <cstring>
++#include <cstdlib>
++#include <vector>
++#include <algorithm>
++#include <windows.h>
++#include <setupapi.h>
++
++enum class PTTLine {
++    DTR = 0,
++    RTS = 1,
++    BOTH = 2
++};
++
++struct SerialPortInfo {
++    std::string port;
++    std::string description;
++};
++
++class SerialPTT {
++public:
++    SerialPTT() = default;
++
++    ~SerialPTT() {
++        close();
++    }
++
++
++
++    bool open(const std::string& port, PTTLine line = PTTLine::RTS,
++              bool invert_dtr = false, bool invert_rts = false) {
++        close();
++
++        port_ = normalize_port(port);
++        line_ = line;
++        invert_dtr_ = invert_dtr;
++        invert_rts_ = invert_rts;
++
++        // \\.\ prefix required for COM10 and above
++        std::string path = port_.rfind("\\\\.\\", 0) == 0 ? port_ : "\\\\.\\" + port_;
++        handle_ = CreateFileA(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
++                              nullptr, OPEN_EXISTING, 0, nullptr);
++        if (handle_ == INVALID_HANDLE_VALUE) {
++            last_error_ = std::string("Failed to open ") + port_ + ": " +
++                          describe_error(GetLastError());
++            return false;
++        }
++
++        DCB dcb;
++        memset(&dcb, 0, sizeof(dcb));
++        dcb.DCBlength = sizeof(dcb);
++        if (GetCommState(handle_, &dcb)) {
++            dcb.fDtrControl = DTR_CONTROL_DISABLE;
++            dcb.fRtsControl = RTS_CONTROL_DISABLE;
++            SetCommState(handle_, &dcb);
++        }
++
++
++
++
++        ptt_off();
++
++
++
++
++        last_error_.clear();
++        open_ = true;
++        return true;
++    }
++
++
++    void close() {
++        if (handle_ != INVALID_HANDLE_VALUE) {
++            ptt_off();
++            CloseHandle(handle_);
++            handle_ = INVALID_HANDLE_VALUE;
++        }
++        open_ = false;
++    }
++
++
++    bool is_open() const { return open_; }
++
++    const std::string& port() const { return port_; }
++
++    const std::string& last_error() const { return last_error_; }
++
++    bool ptt_on() {
++        return apply(true);
++    }
++
++    bool ptt_off() {
++        if (handle_ == INVALID_HANDLE_VALUE) return true;
++        return apply(false);
++    }
++
++    bool reconnect() {
++        std::string saved_port = port_;
++        PTTLine saved_line = line_;
++        bool saved_invert_dtr = invert_dtr_;
++        bool saved_invert_rts = invert_rts_;
++
++        close();
++        return open(saved_port, saved_line, saved_invert_dtr, saved_invert_rts);
++    }
++
++    static std::vector<SerialPortInfo> enumerate() {
++        std::vector<SerialPortInfo> ports;
++
++        static const GUID ports_class_guid =
++            {0x4d36e978, 0xe325, 0x11ce, {0xbf, 0xc1, 0x08, 0x00, 0x2b, 0xe1, 0x03, 0x18}};
++
++        HDEVINFO devs = SetupDiGetClassDevsA(&ports_class_guid, nullptr, nullptr, DIGCF_PRESENT);
++        if (devs == INVALID_HANDLE_VALUE) return ports;
++
++        SP_DEVINFO_DATA info;
++        info.cbSize = sizeof(info);
++        for (DWORD i = 0; SetupDiEnumDeviceInfo(devs, i, &info); i++) {
++            char name[64] = {0};
++            HKEY key = SetupDiOpenDevRegKey(devs, &info, DICS_FLAG_GLOBAL, 0,
++                                            DIREG_DEV, KEY_READ);
++            if (key == INVALID_HANDLE_VALUE) continue;
++            DWORD len = sizeof(name) - 1;
++            LONG rc = RegQueryValueExA(key, "PortName", nullptr, nullptr,
++                                       reinterpret_cast<BYTE*>(name), &len);
++            RegCloseKey(key);
++            if (rc != ERROR_SUCCESS || strncmp(name, "COM", 3) != 0) continue;
++
++            char friendly[256] = {0};
++            SetupDiGetDeviceRegistryPropertyA(devs, &info, SPDRP_FRIENDLYNAME, nullptr,
++                                              reinterpret_cast<BYTE*>(friendly),
++                                              sizeof(friendly) - 1, nullptr);
++            ports.push_back({name, friendly});
++        }
++        SetupDiDestroyDeviceInfoList(devs);
++
++        std::sort(ports.begin(), ports.end(),
++                  [](const SerialPortInfo& a, const SerialPortInfo& b) {
++                      return atoi(a.port.c_str() + 3) < atoi(b.port.c_str() + 3);
++                  });
++        return ports;
++    }
++
++
++private:
++    bool apply(bool on) {
++        if (handle_ == INVALID_HANDLE_VALUE) return false;
++        bool ok = true;
++
++        if (line_ == PTTLine::DTR || line_ == PTTLine::BOTH) {
++            bool assert_line = on != invert_dtr_;
++            ok = EscapeCommFunction(handle_, assert_line ? SETDTR : CLRDTR) && ok;
++        }
++
++        if (line_ == PTTLine::RTS || line_ == PTTLine::BOTH) {
++            bool assert_line = on != invert_rts_;
++            ok = EscapeCommFunction(handle_, assert_line ? SETRTS : CLRRTS) && ok;
++        }
++
++        if (!ok)
++            last_error_ = port_ + ": EscapeCommFunction failed: " +
++                          describe_error(GetLastError());
++
++        return ok;
++    }
++
++    static std::string normalize_port(const std::string& port) {
++        if (!port.empty() &&
++            port.find_first_not_of("0123456789") == std::string::npos)
++            return "COM" + port;
++        std::string p = port;
++        if (p.rfind("com", 0) == 0) {
++            p[0] = 'C';
++            p[1] = 'O';
++            p[2] = 'M';
++        }
++        return p;
++    }
++
++    static std::string describe_error(DWORD err) {
++        switch (err) {
++        case ERROR_FILE_NOT_FOUND:
++        case ERROR_PATH_NOT_FOUND:
++            return "error 2 (no such COM port)";
++        case ERROR_ACCESS_DENIED:
++            return "error 5 (access denied - port in use by another program?)";
++        case ERROR_SEM_TIMEOUT:
++            return "error 121 (device not responding)";
++        default:
++            return "error " + std::to_string(err);
++        }
++    }
++
++    HANDLE handle_ = INVALID_HANDLE_VALUE;
++    bool open_ = false;
++    std::string port_;
++    PTTLine line_ = PTTLine::RTS;
++    bool invert_dtr_ = false;
++    bool invert_rts_ = false;
++    std::string last_error_;
++};

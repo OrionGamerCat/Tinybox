@@ -10,3 +10,5 @@
 *.bin  binary
 # Feeder-Pi: alles laeuft auf dem Pi (sh, systemd), daher immer LF
 feederpi/** text eol=lf
+# modem73: Patch und Build-Skript immer mit LF (patch bricht sonst ab)
+tools/modem73/** text eol=lf
