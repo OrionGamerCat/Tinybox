@@ -27,6 +27,7 @@ import logging
 import math
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -181,6 +182,29 @@ class Modem73Cfg:
         return a + list(self.extra_args)
 
 
+def find_exe(value: str, base: Path, must_exist: bool = True) -> str:
+    """[modem73] exe -> full path. A comment right after the name without a blank
+    ("modem73.exe; ...") is not a comment for the INI reader - cut it off here.
+    Relative paths and a bare name are looked up in the folder of kisshub.conf
+    first, a bare name then on the PATH."""
+    raw = value.split(";", 1)[0].strip().strip('"') or "modem73.exe"
+    p = Path(raw)
+    if p.is_absolute():
+        found = p if p.is_file() else None
+    else:
+        here = (base / p).resolve()
+        found = here if here.is_file() else None
+        if found is None and len(p.parts) == 1 and (w := shutil.which(raw)):
+            found = Path(w)
+    if found is not None:
+        return str(found)
+    if must_exist:
+        where = p if p.is_absolute() else (base / p).resolve()
+        raise ValueError(f"exe = {raw}: not found ({where}) - the path to modem73.exe, "
+                         "relative to the folder of kisshub.conf; build: tools/modem73")
+    return raw
+
+
 def load_section(cp, base: Path) -> Modem73Cfg:
     """[modem73] -> Modem73Cfg. ValueError with '<key>: ...' for a bad value."""
     sec = "modem73"
@@ -216,9 +240,8 @@ def load_section(cp, base: Path) -> Modem73Cfg:
     if not _CALL.match(call):
         raise ValueError("callsign: your callsign without SSID, e.g. OE3GAS (modem73 puts "
                          "it into every OFDM frame; letters, digits, / - at most 9)")
-    exe = s("exe", "modem73.exe")
-    if exe and (os.sep in exe or "/" in exe) and not Path(exe).is_absolute():
-        exe = str((base / exe).resolve())     # relative to kisshub.conf
+    start = b("start", True)
+    exe = find_exe(s("exe", "modem73.exe"), base, must_exist=start)
     ptt = choice("ptt", "com", PTT_TYPES)
     com_port = s("com_port")
     if ptt == "com" and not com_port:
@@ -227,7 +250,7 @@ def load_section(cp, base: Path) -> Modem73Cfg:
     log_output = choice("log_output", "info", ("info", "debug", "off"))
     try:
         cfg = Modem73Cfg(
-            callsign=call.upper(), start=b("start", True), exe=exe,
+            callsign=call.upper(), start=start, exe=exe,
             modulation=choice("modulation", "QAM16", MODULATIONS, upper=True),
             code_rate=choice("code_rate", "1/2", CODE_RATES),
             frame=choice("frame", "short", FRAMES),

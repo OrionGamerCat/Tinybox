@@ -51,11 +51,26 @@ class FrameInfoTests(unittest.TestCase):
 
 
 class ConfigTests(unittest.TestCase):
-    def load(self, text: str, profile: str | None = None):
+    def load(self, text: str, profile: str | None = None, exe: bool = True):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "k.conf"
             p.write_text(text, encoding="utf-8")
+            if exe:
+                (Path(d) / "modem73.exe").write_bytes(b"MZ")
             return hubconfig.load(p, profile)
+
+    def test_exe(self):
+        cfg = self.load(BASE)
+        self.assertTrue(cfg.modem73.exe.endswith("modem73.exe"))
+        self.assertTrue(Path(cfg.modem73.exe).is_absolute())
+        # Gerhard 1.11.2026: "./modem73.exe; path ..." - no blank before the ";"
+        cfg = self.load(BASE + "exe = ./modem73.exe; path to modem73.exe\n")
+        self.assertEqual(Path(cfg.modem73.exe).name, "modem73.exe")
+        with self.assertRaises(hubconfig.ConfigError) as cm:
+            self.load(BASE, exe=False)
+        self.assertIn("not found", str(cm.exception))
+        cfg = self.load(BASE + "start = no\n", exe=False)      # elsewhere: no check
+        self.assertEqual(cfg.modem73.exe, "modem73.exe")
 
     def test_defaults(self):
         cfg = self.load(BASE)

@@ -8,6 +8,9 @@
   aus dem Modus; zu lange Frames werden verworfen statt von modem73 abgeschnitten.
   Windows-Build von modem73: `tools/modem73`. `kisshub.bat -p modem73`, MANUAL 3.5a.
   Funktest steht aus.
+- kisshub 2026.11.01.2: `[modem73] exe` wird schon beim Start geprüft (Ordner der
+  `kisshub.conf`, dann PATH); ein Kommentar direkt hinter dem Namen (`modem73.exe; ...`)
+  gilt nicht mehr als Teil des Pfads.
 - kisshub 2026.10.29: **TNC7multi** (IfD) als neues Profil `tnc7multi` – Drehschalter 1k2/9k6,
   kein Init-Dialog, USB 115200 Bd bzw. RS232 38400 Bd, KISS-Parameter mit den Werten aus dem
   Handbuch (TXDELAY 150 ms, P 64, SlotTime 50 ms). **SMACK** (KISS mit CRC-16): `[tnc] smack`,
