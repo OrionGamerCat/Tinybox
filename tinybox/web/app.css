@@ -104,6 +104,17 @@ main.split .reader-pane { flex: 1 1 0; min-height: 200px; }
 .scroll { flex-grow: 1; overflow: auto; min-height: 0; }
 .empty { padding: 18px; font-weight: 500; }
 
+/* foldable dashboard cards: only the head stays, it keeps its count / state */
+.fold { border: 0; background: none; padding: 0 2px; margin-right: -6px; cursor: pointer; font: inherit;
+        font-size: 13px; line-height: 1; color: inherit; }
+.foldtitle { cursor: pointer; user-select: none; }
+.card.folded { flex: 0 0 auto !important; min-height: 0 !important; max-height: none !important; }
+.card.folded > :not(.card-head) { display: none !important; }
+.card.folded > .card-head { border-bottom: 0; }
+.card.folded > .card-head > :is(.seg, .search, label, input, a.btn, button.btn) { display: none !important; }
+main.two > .col { min-height: 100%; }
+.card.dash-msgs { min-height: 320px; }
+
 /* segmented filter */
 .seg { display: flex; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; }
 .seg button { height: 36px; padding: 0 14px; border: 0; background: var(--paper); color: var(--ink);

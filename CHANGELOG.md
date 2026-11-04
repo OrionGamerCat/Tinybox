@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- **Sysop-Web-GUI: Dashboard** – alle Fenster lassen sich einklappen (Klick auf den Titel oder
+  das Dreieck); der Kopf mit Zähler/Status bleibt sichtbar, der Zustand wird im Browser
+  gemerkt. „Connection log“ und „Stations (JLOG)“ stehen jetzt im Dashboard (links unter
+  Messages) und laden bei jedem Connect/Disconnect neu; die Menüpunkte „Users“, „Stations
+  (JLOG)“ und „Connection log“ sind entfallen.
 - kisshub 2026.11.01: **modem73** (OFDM-Soundkarten-Modem) als neues Profil `modem73` – der
   kisshub startet modem73 selbst aus `[modem73]` in der `kisshub.conf` (Rufzeichen, Modus,
   Soundkarte, PTT) und beendet es mit Strg+C. Sendezeit, PACLEN, Fenster und T1 berechnet er

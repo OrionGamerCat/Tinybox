@@ -124,7 +124,6 @@ async function refreshStatus() {
     fwdBox.title = st.forward.lines.join("\n");   // partners and last session on hover
   }
   $("nav-msgs").textContent = st.messages;
-  $("nav-users").textContent = st.users || "";
   $("nav-ver").replaceChildren("TinyBox " + st.version, h("br"), st.web + " · local only",
                                updateHint(st.update));
   document.title = "TinyBox " + st.mailbox;
@@ -893,18 +892,71 @@ function composeCard(prefill) {
 
 const main = () => $("main");
 
+// Dashboard cards can be folded: click the title (or the caret). Which ones are
+// folded is kept in the browser. Live updates only replace what is inside a card,
+// so a folded card stays folded; its head (count, state) keeps updating.
+const FOLD_KEY = "tinybox.folded";
+function foldedSet() {
+  try { return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) || "[]")); }
+  catch (e) { return new Set(); }
+}
+function foldable(card, key) {
+  const head = card.querySelector(".card-head");
+  const title = head.querySelector("h2");
+  const btn = h("button", { class: "fold", type: "button", title: "Fold / unfold" },
+    h("span", { class: "caret", "aria-hidden": "true" }));
+  const set = (folded) => {
+    card.classList.toggle("folded", folded);
+    btn.setAttribute("aria-expanded", String(!folded));
+    btn.firstChild.textContent = folded ? "\u25b8" : "\u25be";
+  };
+  const toggle = () => {
+    const folded = !card.classList.contains("folded");
+    set(folded);
+    const keys = foldedSet();
+    if (folded) keys.add(key); else keys.delete(key);
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify([...keys])); } catch (e) { /* private mode */ }
+  };
+  btn.addEventListener("click", toggle);
+  title.classList.add("foldtitle");
+  title.addEventListener("click", toggle);
+  head.prepend(btn);
+  set(foldedSet().has(key));
+  return card;
+}
+
 function viewDashboard() {
   const msgs = messagesCard();
   const sess = sessionsCard();
   const rub = rubricsCard();
   const mon = monitorCard();
+  const conn = connlogCard();
+  const jlog = jlogCard();
   const kiss = S.status && S.status.interface === "kiss";
   const chan = kiss ? channelCard() : null;
+  foldable(msgs.card, "messages");
+  foldable(conn.card, "connlog");
+  foldable(jlog.card, "jlog");
+  foldable(sess.card, "connected");
+  if (chan) foldable(chan.card, "channel");
+  foldable(rub.card, "rubrics");
+  foldable(mon.card, "monitor");
+  msgs.card.classList.add("dash-msgs");
   main().className = "two";
-  main().replaceChildren(msgs.card, h("div", { class: "col" }, sess.card,
-                                      ...(chan ? [chan.card] : []), rub.card, mon.card));
-  if (chan) live(chan.update, 10);
-  return { updateMessages: () => { msgs.update(); rub.update(); }, updateSessions: sess.update,
+  main().replaceChildren(h("div", { class: "col" }, msgs.card, conn.card, jlog.card),
+                         h("div", { class: "col" }, sess.card, ...(chan ? [chan.card] : []), rub.card, mon.card));
+  // connection log and JLOG change only when a station connects or disconnects
+  let calls = S.sessions.map((s) => s.call).join(" ");
+  const updateSessions = () => {
+    sess.update();
+    const now = S.sessions.map((s) => s.call).join(" ");
+    if (now === calls) return;
+    calls = now;
+    conn.update();
+    jlog.update();
+  };
+  if (chan) live(chan.update, 10);                 // also when folded: its head shows the TNC state
+  return { updateMessages: () => { msgs.update(); rub.update(); }, updateSessions,
            monitorBody: mon.body };
 }
 
@@ -1027,14 +1079,6 @@ function live(fn, sec) {
   liveTimer = setInterval(() => { fn().catch(() => {}); }, sec * 1000);
 }
 
-function viewUsers() {
-  const sess = sessionsCard();
-  main().className = "one";
-  main().replaceChildren(sess.card);
-  live(refreshSessions, 5);
-  return { updateSessions: sess.update };
-}
-
 function viewUser(call) {
   const card = h("section", { class: "card", style: "flex-shrink: 0" });   // the page scrolls, not the card
   main().className = "one";
@@ -1045,7 +1089,7 @@ function viewUser(call) {
       clearInterval(liveTimer);
       card.replaceChildren(
         h("div", { class: "card-head" }, h("div", { class: "crumb grow" },
-          h("a", { href: "#/users", text: "Users" }), "\u203a", h("span", { class: "mono", text: call }))),
+          h("a", { href: "#/dashboard", text: "Dashboard" }), "\u203a", h("span", { class: "mono", text: call }))),
         h("div", { class: "empty", text: e.message }));
     }
   };
@@ -1163,7 +1207,7 @@ function renderUser(card, d) {
 
   card.replaceChildren(
     h("div", { class: "card-head" },
-      h("div", { class: "crumb grow" }, h("a", { href: "#/users", text: "Users" }), "\u203a",
+      h("div", { class: "crumb grow" }, h("a", { href: "#/dashboard", text: "Dashboard" }), "\u203a",
         h("span", { class: "mono", text: s.call })),
       h("button", { class: "btn sm danger", type: "button", onclick: () => disconnect(s.call) }, "Disconnect")),
     h("div", { class: "detail" },
@@ -1191,7 +1235,7 @@ function renderUser(card, d) {
 function renderLocalUser(card, s) {
   card.replaceChildren(
     h("div", { class: "card-head" },
-      h("div", { class: "crumb grow" }, h("a", { href: "#/users", text: "Users" }), "\u203a",
+      h("div", { class: "crumb grow" }, h("a", { href: "#/dashboard", text: "Dashboard" }), "\u203a",
         h("span", { class: "mono", text: s.call })),
       h("button", { class: "btn sm danger", type: "button", onclick: () => disconnect(s.call) }, "Disconnect")),
     h("div", { class: "detail" },
@@ -1211,23 +1255,30 @@ function viewMonitor() {
   return { monitorBody: mon.body };
 }
 
-function viewJlog() {
+// Stations (JLOG) and the connection log are dashboard cards (no menu entries of their
+// own any more). They reload when a station connects or disconnects.
+function jlogCard() {
   const tbody = h("tbody", {}, h("tr", {}, h("td", { colspan: 7, text: "Loading ..." })));
-  main().className = "one";
-  main().replaceChildren(h("section", { class: "card" },
-    h("div", { class: "card-head" }, h("h2", { text: "Stations (JLOG)" })),
-    h("div", { class: "scroll" }, h("table", { class: "data" },
-      h("thead", {}, h("tr", {}, ["Call", "Name", "Locator", "Home BBS", "First seen (UTC)", "Last seen (UTC)", "Connects"].map((t) => h("th", { text: t })))),
-      tbody))));
-  api("jlog").then((rows) => {
+  const count = h("span", { class: "mono", style: "font-weight: 700" });
+  async function update() {
+    let rows;
+    try { rows = await api("jlog"); }
+    catch (e) { tbody.replaceChildren(h("tr", {}, h("td", { colspan: 7, text: e.message }))); return; }
+    count.textContent = String(rows.length);
     tbody.replaceChildren(...(rows.length ? rows.map((r) => h("tr", {},
       h("td", { class: "mono", text: r.call }), h("td", { text: r.name || "" }),
       h("td", { class: "mono", text: r.loc || "" }), h("td", { class: "mono", text: r.home || "" }),
       h("td", { class: "mono", text: fullDate(r.first_seen) }),
       h("td", { class: "mono", text: fullDate(r.last_seen) }), h("td", { class: "mono subject", text: r.count })))
       : [h("tr", {}, h("td", { colspan: 7, text: "No stations logged yet." }))]));
-  }).catch((e) => toast(e.message, true));
-  return {};
+  }
+  const card = h("section", { class: "card", style: "flex-shrink: 0; max-height: 40vh" },
+    h("div", { class: "card-head" }, h("h2", { class: "grow", text: "Stations (JLOG)" }), count),
+    h("div", { class: "scroll" }, h("table", { class: "data" },
+      h("thead", {}, h("tr", {}, ["Call", "Name", "Locator", "Home BBS", "First seen (UTC)", "Last seen (UTC)", "Connects"].map((t) => h("th", { text: t })))),
+      tbody)));
+  update();
+  return { card, update };
 }
 
 // CR44: connection log - one row per connection, kept forever; export CSV/ADIF
@@ -1239,7 +1290,7 @@ function fmtDur(s) {
 function fmtBytes(n) {
   return n === null || n === undefined ? "-" : n < 1000 ? String(n) : (n / 1000).toFixed(1) + " k";
 }
-function viewConnlog() {
+function connlogCard() {
   const tbody = h("tbody", {}, h("tr", {}, h("td", { colspan: 8, text: "Loading ..." })));
   const filter = h("input", { type: "search", placeholder: "Filter call", class: "mono",
                               style: "width:9em", "aria-label": "Filter by call" });
@@ -1265,15 +1316,18 @@ function viewConnlog() {
       : [h("tr", {}, h("td", { colspan: 8, text: rows.length ? "No match." : "No connects logged yet." }))]));
   };
   filter.addEventListener("input", show);
-  main().className = "one";
-  main().replaceChildren(h("section", { class: "card" },
+  async function update() {
+    try { rows = await api("connlog"); show(); }
+    catch (e) { tbody.replaceChildren(h("tr", {}, h("td", { colspan: 8, text: e.message }))); }
+  }
+  const card = h("section", { class: "card", style: "flex-shrink: 0; max-height: 40vh" },
     h("div", { class: "card-head" }, h("h2", { class: "grow", text: "Connection log" }), filter, csv, adi),
     h("div", { class: "scroll" }, h("table", { class: "data" },
       h("thead", {}, h("tr", {}, ["Connect (UTC)", "Disconnect (UTC)", "Duration", "Call", "Via",
         "Bytes in / out", "On air out / in", "Ended"].map((t) => h("th", { text: t })))),
-      tbody))));
-  api("connlog").then((r) => { rows = r; show(); }).catch((e) => toast(e.message, true));
-  return {};
+      tbody)));
+  update();
+  return { card, update };
 }
 
 function viewSettings() {
@@ -1303,13 +1357,12 @@ function route() {
   const name = parts[0] || "dashboard";
   if (name !== "message") S.currentId = null;
   clearInterval(liveTimer);
-  const navKey = name === "message" || name === "compose" ? "messages" : name === "user" ? "users" : name;
+  const navKey = name === "message" || name === "compose" ? "messages" : name === "user" ? "dashboard" : name;
   document.querySelectorAll(".side a[data-nav]").forEach((a) =>
     a.classList.toggle("active", a.dataset.nav === navKey));
   renderRubricNav();                              // Rubrik in der Seitenleiste markieren
   const views = { dashboard: viewDashboard, messages: viewMessages, compose: viewCompose,
-                  users: viewUsers, monitor: viewMonitor, jlog: viewJlog,
-                  connlog: viewConnlog, settings: viewSettings };
+                  monitor: viewMonitor, settings: viewSettings };   // users, jlog, connlog: on the dashboard
   if (name === "message" && /^\d+$/.test(parts[1] || "")) {
     if (S.view && S.view.showMessage) { S.view.showMessage(Number(parts[1])); return; }   // CR51
     S.view = viewMessage(Number(parts[1]));
