@@ -849,6 +849,32 @@ class VaraTunnelTests(HubTestBase):
 
 
 
+class StartBlockTests(unittest.TestCase):
+    """The start block (and console I) fits into 80 columns."""
+
+    def test_lines_fit_80_columns(self):
+        from kisshub.__main__ import PREFIX_WIDTH, start_items
+        for name in ("tnc7multi", "vara-fm", "pk232", "direwolf"):
+            with self.subTest(name):
+                items = start_items("k.conf", example(name))
+                for x in items:
+                    if x is None or isinstance(x, str) or (len(x) > 3 and x[3]):
+                        continue
+                    line = termcolor.kv_plain(*x[:3])
+                    if " " in str(x[1]) or not x[0]:         # paths stay in one piece
+                        self.assertLessEqual(PREFIX_WIDTH + len(line), 80, line)
+
+    def test_wrap(self):
+        from kisshub.__main__ import wrap_items
+        items = wrap_items([("Label", "one two three four five six", "(a note)")], width=12)
+        self.assertEqual(items, [("Label", "one two", ""), ("", "three four", ""),
+                                 ("", "five six", ""), ("", "(a note)")])
+        self.assertEqual(wrap_items([("L", "short", "(n)")], width=20), [("L", "short", "(n)")])
+        link = ("Status query", "http://127.0.0.1:8102/status", "", True)
+        self.assertEqual(wrap_items([link, None, "plain"], width=5), [link, None, "plain"])
+        self.assertEqual(termcolor.kv_plain("", "x"), " " * termcolor.LABEL_WIDTH + " x")
+
+
 class RadioValuesTests(unittest.TestCase):
     """CR70: kisshub owns the radio values and tells where each one came from."""
 
@@ -862,7 +888,14 @@ class RadioValuesTests(unittest.TestCase):
                          (256, 4, 18.0))
         self.assertEqual((h.status_port, cfg.hints), (8102, ()))
         text = "\n".join(termcolor.kv_plain(*x) for x in hubconfig.radio_lines(cfg))
-        self.assertIn("air_baud 350 (kisshub.conf [vara-fm])", text)
+        self.assertIn("Radio values as defined in conf-file:", text)
+        self.assertRegex(text, r"  air_baud: +350 Bd\n")       # from the section: bare
+        self.assertNotIn("kisshub.conf [vara-fm]", text)
+        # a value from elsewhere names where it came from
+        moved = dataclasses.replace(h, sources={**h.sources, "txdelay_ms": "console"})
+        text = "\n".join(termcolor.kv_plain(*x) for x in
+                         hubconfig.radio_lines(dataclasses.replace(cfg, hub=moved)))
+        self.assertRegex(text, r"  txdelay: +2700 ms  \(console\)")
 
     def test_overrides_and_old_keys(self):
         cfg = example("t", "[t]\nbase = vara-fm\nair_baud = 600\nt1_min_sec = 25\n"
@@ -984,6 +1017,10 @@ class ConsoleTests(HubTestBase):
         self.assertIn("TXDELAY 600 ms", lines[-1])
         con.handle_line("bogus")
         self.assertIn("unknown command", lines[-1])
+        calls = []
+        Console(self.hub, ctl, out=lines.append, info=lambda: calls.append(1)).handle_line("i")
+        con.handle_line("INFO")
+        self.assertEqual((calls, lines[-1]), ([1], "no start block available"))
 
 
 # --- TNC7multi (KISS/SMACK, handbook V1.04) -------------------------------------------

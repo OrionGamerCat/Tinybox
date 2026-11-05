@@ -803,6 +803,12 @@ so lassen sich Modems vergleichen.
 | `LOG MARK text` | Marke ins Log (vor jedem Testschritt) |
 | `LOG TRACE` | jedes Byte zum/vom TNC |
 | `S` | Kurzstatus TNC, Warteschlange, Clients |
+| `I` / `INFO` | den Startblock noch einmal: Profil, Ports, Funkwerte, AX.25-Empfehlung, Log-Dateien – mit den aktuellen Werten (z. B. nach `TXDELAY` in der Konsole) |
+
+Der Startblock (und `I`) ist auf 80 Spalten umbrochen. Unter **Radio values as defined in
+conf-file** stehen die Werte aus dem TNC-Abschnitt ohne Quellenangabe; nur ein Wert von
+anderswo nennt seine Herkunft, z. B. `(direwolf.conf)`, `(modem73 BPSK 1/2 short)` oder
+`(console)`. Lange Pfade werden nicht getrennt.
 
 **Links-Datei** (`[log] links_file`): je beendeter Verbindung eine JSON-Zeile mit TNC-Profil,
 Einstellungen, VARA-Messwerten, Tunnel-Zählern und allen Kennzahlen. Für einen Vergleich je Lauf

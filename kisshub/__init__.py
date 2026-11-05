@@ -15,4 +15,4 @@ docs/kiss-mode-konzept.md section 4, PLANUNG.md section 15.
     modem73.py    modem73 (OFDM): mode table, its conf keys, starts/stops the modem73 process
 """
 
-VERSION = "2026.11.05"
+VERSION = "2026.11.05.2"

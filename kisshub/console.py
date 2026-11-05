@@ -1,6 +1,7 @@
 """kisshub console: commands typed into the kisshub window while it runs.
 
     H / ?                 help
+    I / INFO              the start block again: profile, port, radio values, log files
     S / STATUS            TNC, queue and clients in one line
     LOG                   log level, file, debug and trace
     LOG MARK text         a marker line in the log (before a test)
@@ -38,6 +39,7 @@ from .tnc import PARAM_NAMES
 log = logging.getLogger("kisshub")
 
 HELP = """kisshub console:
+  I / INFO             start block: profile, ports, radio values, log files
   S / STATUS           TNC, queue and clients
   LOG                  log level, file, debug, trace
   LOG MARK text        marker line in the log (before a test)
@@ -82,10 +84,11 @@ class LogControl:
 
 
 class Console:
-    def __init__(self, hub, control: LogControl, out=print) -> None:
+    def __init__(self, hub, control: LogControl, out=print, info=None) -> None:
         self.hub = hub
         self.control = control
         self.out = out
+        self.info = info                             # I: writes the start block again
 
     @property
     def tnc(self):
@@ -113,6 +116,11 @@ class Console:
         try:
             if word in ("H", "?", "HELP"):
                 self.out(HELP)
+            elif word in ("I", "INFO"):
+                if self.info is None:
+                    self.out("no start block available")
+                else:
+                    self.info()
             elif word in ("S", "STATUS"):
                 self.out(self.hub.status())
             elif word == "LOG":

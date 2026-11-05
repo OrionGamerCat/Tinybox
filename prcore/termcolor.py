@@ -92,8 +92,9 @@ def check_mode(value: str) -> str:
 
 
 def kv_plain(label: str, value, note: str = "") -> str:
-    """'Your call:              OE3XXX' - the text of a label/value line."""
-    text = f"{label + ':':<{LABEL_WIDTH}} {value}"
+    """'Your call:              OE3XXX' - the text of a label/value line. An empty
+    label gives a continuation line (value under the value above, no colon)."""
+    text = f"{label + ':' if label else '':<{LABEL_WIDTH}} {value}"
     return text + f"  {note}" if note else text
 
 
@@ -101,7 +102,7 @@ def kv(log: logging.Logger, label: str, value, note: str = "", url: bool = False
        level: int = logging.INFO) -> None:
     """A label/value line of a start block:  'Your call:              OE3XXX'."""
     log.log(level, "%s", kv_plain(label, value, note),
-            extra={"tb_kv": (label + ":", str(value), note), "tb_url": url})
+            extra={"tb_kv": (label + ":" if label else "", str(value), note), "tb_url": url})
 
 
 def kv_block(log: logging.Logger, items) -> None:

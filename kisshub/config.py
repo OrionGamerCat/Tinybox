@@ -389,23 +389,37 @@ def _color(value: str) -> str:
         raise ConfigError(str(exc)) from None
 
 
+RADIO_HEAD = "Radio values as defined in conf-file"
+
+
 def radio_lines(cfg: Config) -> list[tuple]:
-    """CR70: where each radio value came from - start block items."""
+    """CR70: the radio values - start block items. A value from the TNC section of
+    kisshub.conf is shown bare; one from elsewhere (direwolf.conf, the modem73 mode,
+    the console) names where it came from."""
     h = cfg.hub
     src = h.sources
-    lines = [("Radio values", f"air_baud {h.air_baud} ({src.get('air_baud')}), "
-                              f"txdelay {round(h.txdelay_sec * 1000)} ms ({src.get('txdelay_ms')}), "
-                              f"max_lead {round(h.max_lead_sec * 1000)} ms ({src.get('max_lead_ms')})"),
-             ("AX.25 recommendation", ", ".join(f"{k} {v}" for k, v in h.ax25.items()),
-              f"({src.get('ax25')}; for TinyBox and client)")]
-    if cfg.direwolf:
-        lines.insert(0, ("direwolf.conf", cfg.direwolf))
+    here = f"kisshub.conf [{h.profile}]"
+
+    def note(key: str) -> str:
+        where = src.get(key, here)
+        return "" if where == here else f"({where})"
+
     m = cfg.modem73
     if m is not None:
-        lines[0] = ("Radio values", f"fixed per frame: {round(h.txdelay_sec * 1000)} ms "
-                                    f"(lead {m.lead_ms} + frame {round(m.frame_sec * 1000)}), "
-                                    f"max_lead {round(h.max_lead_sec * 1000)} ms "
-                                    f"({src.get('max_lead_ms')})")
+        radio = [("  per frame", f"{round(h.txdelay_sec * 1000)} ms (lead {m.lead_ms} + "
+                                 f"frame {round(m.frame_sec * 1000)})", note("txdelay_ms"))]
+    else:
+        radio = [("  air_baud", f"{h.air_baud} Bd", note("air_baud")),
+                 ("  txdelay", f"{round(h.txdelay_sec * 1000)} ms", note("txdelay_ms"))]
+    radio.append(("  max_lead", f"{round(h.max_lead_sec * 1000)} ms", note("max_lead_ms")))
+    ax_src = src.get("ax25", here).replace(f" + {here}", "")
+    lines = [(RADIO_HEAD, ""), *radio,
+             ("AX.25 recommendation", ", ".join(f"{k} {v}" for k, v in h.ax25.items()),
+              "(for TinyBox and client)" if ax_src == here
+              else f"({ax_src}; for TinyBox and client)")]
+    if cfg.direwolf:
+        lines.insert(0, ("direwolf.conf", cfg.direwolf))
+    if m is not None:
         lines.insert(0, ("modem73", m.describe(),
                          f"({'started by kisshub: ' + m.exe if m.start else 'start = no'})"))
     p = cfg.tnc.profile

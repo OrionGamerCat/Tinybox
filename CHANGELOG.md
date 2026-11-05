@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+- kisshub 2026.11.05.2: Konsolenbefehl **`I` / `INFO`** zeigt den Startblock noch einmal (mit
+  den aktuellen Werten). Startblock auf **80 Spalten** umbrochen; „Radio values as defined in
+  conf-file“ mit einer Zeile je Wert, die Herkunft steht nur noch, wenn sie nicht der
+  TNC-Abschnitt ist (direwolf.conf, modem73, Konsole).
 - kisshub 2026.11.05: **ein Abschnitt je TNC** in der `kisshub.conf` – alle Werte eines TNC
   (Anschluss, Weck-/Init-/Exit-Dialog, Funkwerte, AX.25-Empfehlung) stehen in seinem eigenen
   Abschnitt, z. B. `[pk232]`, `[tm-d710]`, `[vara-fm]`; im Programm stehen keine Gerätewerte
