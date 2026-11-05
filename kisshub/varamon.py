@@ -21,7 +21,7 @@ logged as text, never evaluated.
 
 From PTT and the bytes kisshub handed to VARA, the monitor fits a straight
 line  airtime = overhead + bytes * 8 / rate  - VARA's real cost per burst and
-its rate, instead of the estimate from [kiss] air_baud / txdelay_ms.
+its rate, instead of the estimate from air_baud / txdelay_ms in the TNC section.
 
 CAUTION (CR67 open question 2): with an older VARA, a program on the command
 port together with KISS left the PTT keyed. Switch the monitor on the first

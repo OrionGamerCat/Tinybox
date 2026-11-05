@@ -1,6 +1,6 @@
 """modem73 (RFnexus, OFDM soundcard modem) as kisshub's "TNC" (profile modem73).
 
-kisshub starts modem73.exe itself from the [modem73] section of kisshub.conf,
+kisshub starts modem73.exe itself from its TNC section (type = modem73) in kisshub.conf,
 talks KISS-TCP to it like to any TNC and stops it again on Ctrl+C. modem73 is
 a transparent KISS modem: every KISS data frame becomes one modem frame, so
 SABM / I / RR go through unchanged (unlike VARA, no tunnel).
@@ -85,10 +85,16 @@ def frame_info(modulation: str, code_rate: str, frame: str) -> tuple[int, float]
 
 _CALL = re.compile(r"^[A-Za-z0-9/]{3,9}$")
 
+# the keys of a TNC section with type = modem73 that load_section reads
+KEYS = ("callsign", "start", "exe", "modulation", "code_rate", "frame", "input_device",
+        "output_device", "tx_level", "ptt", "com_port", "com_line", "rigctl", "ptt_delay_ms",
+        "tx_delay_ms", "ptt_tail_ms", "lead_tone", "csma_band", "csma_preset", "csma_burst",
+        "control_port", "extra_args", "log_output")
+
 
 @dataclass(frozen=True)
 class Modem73Cfg:
-    """[modem73] in kisshub.conf - see kisshub.conf.example."""
+    """The modem73 keys of the TNC section (type = modem73) - see kisshub.conf.example."""
     callsign: str
     start: bool = True                 # no: modem73 runs on its own, values only
     exe: str = "modem73.exe"
@@ -158,7 +164,7 @@ class Modem73Cfg:
 
     def args(self, port: int, bind: str) -> list[str]:
         """Command line for modem73 (headless). KISS port and bind address come from
-        [tnc] port / host."""
+        the TNC section's port / host."""
         a = ["--headless", "-c", self.callsign.upper(), "-p", str(port), "--bind", bind,
              "--control-port", str(self.control_port),
              "--modem", "ofdm", "-m", self.modulation, "-r", self.code_rate, f"--{self.frame}",
@@ -183,7 +189,7 @@ class Modem73Cfg:
 
 
 def find_exe(value: str, base: Path, must_exist: bool = True) -> str:
-    """[modem73] exe -> full path. A comment right after the name without a blank
+    """exe (TNC section, type = modem73) -> full path. A comment right after the name without a blank
     ("modem73.exe; ...") is not a comment for the INI reader - cut it off here.
     Relative paths and a bare name are looked up in the folder of kisshub.conf
     first, a bare name then on the PATH."""
@@ -205,9 +211,9 @@ def find_exe(value: str, base: Path, must_exist: bool = True) -> str:
     return raw
 
 
-def load_section(cp, base: Path) -> Modem73Cfg:
-    """[modem73] -> Modem73Cfg. ValueError with '<key>: ...' for a bad value."""
-    sec = "modem73"
+def load_section(cp, base: Path, sec: str = "modem73") -> Modem73Cfg:
+    """The modem73 keys of a TNC section (type = modem73) -> Modem73Cfg. ValueError
+    with '<key>: ...' for a bad value."""
 
     def s(key: str, default: str = "") -> str:
         return cp.get(sec, key, fallback=default).strip()
@@ -312,7 +318,7 @@ class Modem73Process:
                 stderr=asyncio.subprocess.STDOUT, **kw)
         except OSError as exc:
             raise RuntimeError(f"modem73 could not be started ({self.cfg.exe}): {exc} - "
-                               "[modem73] exe, build: tools/modem73/README.md") from None
+                               "exe in the modem73 section, build: tools/modem73/README.md") from None
         self.starts += 1
         self._pump = asyncio.create_task(self._read(self.proc))
 

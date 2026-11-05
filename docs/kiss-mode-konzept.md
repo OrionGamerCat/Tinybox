@@ -300,7 +300,9 @@ greift immer der v2.0-Rückfall.
 Die Tabelle beruht auf den Handbüchern bzw. bekannten Abläufen; Details
 (Port-Wahl beim PK-232, Puffergrößen der Kenwood-TNCs, Verhalten von
 TXDELAY-Befehlen im Kenwood-KISS) werden im Funktest je Gerät bestätigt und
-dann als **Geräteprofil** im Hub abgelegt:
+dann als **Geräteprofil** im Hub abgelegt. (Seit kisshub 2026.11.05 steht jedes
+Geräteprofil vollständig als eigener Abschnitt in der `kisshub.conf`, z. B. `[pk232]` –
+MANUAL.md 2.4. Der Entwurf unten ist der Stand vom 14.10.2026.)
 
 ```ini
 ; kisshub.conf (Variante B)
@@ -460,7 +462,7 @@ Abweichung sofort zuordnen.
    `TNC in KISS mode - ready`.
    - Zeile mit `?bad` / `?What?` (Warnung) oder `TNC init failed`: Log schicken.
      Mit `[log] level = DEBUG` steht jedes Byte des Dialogs drin.
-   - Zeile kann man ohne Code-Änderung ersetzen: `[tnc] init_lines = ...`.
+   - Zeile kann man ohne Code-Änderung ersetzen: `init =` im Abschnitt `[pk232]` der conf.
 5. **`tinybox.conf`:** `[radio] interface = kiss`, `[kiss] port = 8101`
    (8101 = kisshub, 8001 = Direwolf), TinyBox neu starten. kisshub meldet
    `client1 ... connected`, die Web-GUI zeigt `via KISS`.
@@ -489,7 +491,7 @@ Folge: KISS-Parameter (TXDELAY = Kommando 1, P = Kommando 2) wären bei VARA **D
 Luft**. Das Profil `vara-fm`/`vara-hf` sendet keine Parameter; `[kiss] send_params = yes` wird mit
 Fehler abgewiesen, die Konsole (`TXDELAY …`) ändert dann nur den Sendetakt des Hubs.
 
-**Tunnel (kisshub):** Profil `vara-fm`, `[tnc] vara_tunnel = connected` (Standard): UI-Frames gehen
+**Tunnel (kisshub):** Profil `vara-fm`, `vara_tunnel = connected` (im Abschnitt `[vara-fm]`): UI-Frames gehen
 wie bisher als Typ 0 (lesbar für jede VARA-KISS-Anwendung), alle anderen Frames als Typ 2 mit dem
 Kennzeichen `AX` vor dem unveränderten AX.25-Frame. Der kisshub der Gegenseite packt Typ-2-Rahmen
 mit `AX` wieder aus und gibt sie als normale KISS-Frames an TinyBox/Client – die merken nichts.
@@ -551,8 +553,8 @@ schwachen Signalen zu erwarten (eigener Test mit reduzierter Leistung offen).
 **Folgerungen:**
 - Für VARA in TinyBox/Client und kisshub `[kiss] air_baud = 350`, `txdelay_ms = 2700` (gemessen),
   sonst startet T1 zu früh (unnötige Polls); T1-Untergrenze ≥ 18 s; T2 0,3 s; Fenster 4, 256 B.
-- kisshub `[kiss] max_lead_ms = 12000` bei VARA, damit ein ganzes Fenster auf einmal an VARA geht.
-- **Bündelung im Tunnel** (kisshub 2026.10.18.5, `[tnc] vara_bundle_ms`): mehrere AX.25-Frames
+- kisshub `max_lead_ms = 12000` bei VARA, damit ein ganzes Fenster auf einmal an VARA geht.
+- **Bündelung im Tunnel** (kisshub 2026.10.18.5, `vara_bundle_ms`): mehrere AX.25-Frames
   als **ein** Typ-2-Rahmen (`AB` + je 2 Byte Länge + Frame, bis `vara_bundle_max` Byte) – VARA soll
   so größere Rahmen sehen und eine schnellere Stufe wählen. Einzelne Frames weiter als `AX` +
   Frame. Beide Stationen brauchen die neue Version.

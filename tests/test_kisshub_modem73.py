@@ -1,4 +1,4 @@
-"""kisshub profile modem73: mode table, [modem73] config, hub timing and the
+"""kisshub type modem73: mode table, its TNC section, hub timing and the
 modem73 process (a fake modem73 in Python that speaks KISS-TCP)."""
 
 from __future__ import annotations
@@ -18,12 +18,16 @@ from prcore.ax25 import frame as ax
 
 ROOT = Path(__file__).resolve().parent.parent
 
-BASE = """[tnc]
+HEAD = """[kisshub]
 profile = modem73
 [modem73]
-callsign = OE3GAS
-com_port = COM5
+type = modem73
+transport = tcp
+port = 8011
+reconnect_sec = 10
+settle_sec = 0.2
 """
+BASE = HEAD + "callsign = OE3GAS\ncom_port = COM5\n"
 
 
 class FrameInfoTests(unittest.TestCase):
@@ -113,33 +117,31 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(self.load(text).hints, ())
 
     def test_paclen_override(self):
-        cfg = self.load(BASE + "[ax25]\npaclen = 200\n")
+        cfg = self.load(BASE + "paclen = 200\n")
         self.assertEqual(cfg.hub.ax25["paclen"], 200)
         with self.assertRaises(hubconfig.ConfigError) as cm:
-            self.load(BASE + "[ax25]\npaclen = 240\n")
+            self.load(BASE + "paclen = 240\n")
         self.assertIn("at most 223", str(cm.exception))
 
     def test_invalid(self):
-        m = "[modem73]\ncallsign = OE3GAS\ncom_port = COM5\n"
         for text, word in (
-                ("[tnc]\nprofile = modem73\n" + m + "[kiss]\nair_baud = 9600\n", "air_baud"),
-                ("[tnc]\nprofile = modem73\ntransport = serial\ndevice = COM3\n" + m,
-                 "transport"),
-                ("[tnc]\nprofile = modem73\nhost = 192.168.1.5\n" + m, "host"),
+                (BASE + "air_baud = 9600\n", "air_baud"),
+                (BASE.replace("transport = tcp", "transport = serial\ndevice = COM3\n"
+                              "serial_baud = 9600"), "transport"),
+                (BASE + "host = 192.168.1.5\n", "host"),
                 (BASE + "modulation = QAM1024\nframe = long\n", "not available"),
                 (BASE + "modulation = BPSK\ncode_rate = 1/4\n", "too small"),
                 (BASE + "csma_burst = 5\n", "csma_burst"),
-                ("[tnc]\nprofile = modem73\n[modem73]\ncallsign = OE3GAS\n", "com_port"),
-                ("[tnc]\nprofile = modem73\n[modem73]\ncallsign = OE3GAS-7\nptt = none\n",
-                 "callsign"),
-                ("[tnc]\nprofile = modem73\n[modem73]\nptt = none\n", "callsign")):
+                (BASE + "send_params = yes\n", "send_params"),
+                (HEAD + "callsign = OE3GAS\n", "com_port"),
+                (HEAD + "callsign = OE3GAS-7\nptt = none\n", "callsign"),
+                (HEAD + "ptt = none\n", "callsign")):
             with self.assertRaises(hubconfig.ConfigError, msg=text) as cm:
                 self.load(text)
             self.assertIn(word, str(cm.exception), text)
 
     def test_host_elsewhere_with_start_no(self):
-        cfg = self.load("[tnc]\nprofile = modem73\nhost = 192.168.1.5\n"
-                        "[modem73]\ncallsign = OE3GAS\nstart = no\nptt = none\n")
+        cfg = self.load(HEAD + "host = 192.168.1.5\ncallsign = OE3GAS\nstart = no\nptt = none\n")
         self.assertFalse(cfg.modem73.start)
         self.assertEqual(cfg.tnc.host, "192.168.1.5")
 

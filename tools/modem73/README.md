@@ -34,7 +34,7 @@ angenommen, CSMA, PTT, TX-Audio). Mit echter Soundkarte/Funkgerät noch offen.
 
 ## Betrieb mit dem kisshub
 
-Der kisshub startet modem73 selbst: Profil `modem73`, Abschnitt `[modem73]` in der
+Der kisshub startet modem73 selbst: Abschnitt `[modem73]` mit `type = modem73` in der
 `kisshub.conf`, Start `kisshub.bat -p modem73` – Beschreibung in MANUAL.md 3.5a. Die
 Kommandozeile unten ist nur für einen Test von Hand.
 

@@ -124,7 +124,7 @@ class HubCfg:
     # CR70: what TinyBox and the client take from the status query ("radio")
     profile: str = "generic"
     sources: dict = field(default_factory=dict)   # value -> where it came from
-    ax25: dict = field(default_factory=dict)      # AX.25 recommendation ([ax25] keys)
+    ax25: dict = field(default_factory=dict)      # AX.25 recommendation (paclen, maxframe ... of the TNC section)
     # profile modem73: fixed air time per frame (txdelay = lead + frame); a frame queued
     # behind another goes out in the same key-up and adds frame_sec (frame + 200 ms gap)
     frame_sec: float = 0.0           # 0 = air time by bytes (HDLC TNCs, VARA)

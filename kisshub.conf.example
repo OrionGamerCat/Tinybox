@@ -4,63 +4,44 @@
 ; TinyBox and the client read them from kisshub's status query - nothing to copy there.
 ; Example configurations: MANUAL.md section 2.4
 ;
-; ONE FILE FOR ALL TNCs: start with -p to pick the profile, e.g.
-;   kisshub.bat -p pk232      kisshub.bat -p vara-fm      kisshub.bat -p direwolf
-;   kisshub.bat -p modem73
-; -p overrides [tnc] profile. [<section>.<profile>] (e.g. [kiss.pk232] or
-; [tnc.vara-fm]) overrides a section for that profile only, {profile} in the
-; [log] file names becomes the profile name. kisshub -h (or -?) shows the help.
-
-[tnc]
-profile   = pk232          ; default when started without -p: pk232 | tm-d710 | tnc7multi |
-                           ; th-d74 |
-                           ; th-d75 | tnc2-kiss | generic | vara-fm | vara-hf | direwolf |
-                           ; modem73
-; transport = serial       ; serial | tcp - default: tcp for vara-* / direwolf, else serial
-device    = COM3           ; serial only: Windows COM3, Raspberry Pi /dev/ttyUSB0
-serial_baud = 9600         ; PC <-> TNC (PK-232: its TBAUD; 9600 as pk232py uses it)
-; rtscts    =              ; RTS/CTS hardware flow control - default: yes for tm-d710
-;                          ; (the radio paces kisshub over CTS), no for the others
-; host = 127.0.0.1         ; tcp only
-;                          ;   tcp for modem73 too
-; port =                   ; tcp only - default: vara-* 8100, direwolf KISSPORT, modem73 8011
-;                          ; (else 8001)
-reconnect_sec = 10
-exit_kiss_on_stop = yes    ; on Ctrl+C: leave KISS, so pk232py / a terminal finds cmd:
-; smack = no               ; KISS with CRC-16 (SMACK) - default: yes for tnc7multi, no else
-; init_lines = AWLEN 8 | PARITY 0 | RESTART | ... | KISS ON | HOST ON
-;              replaces the profile's init; the last line enters KISS
+; ONE SECTION PER TNC (kisshub 2026.11.05): every value of a TNC is in its own section,
+; nothing comes from the program code. The section name is the profile name:
+;   kisshub.bat -p pk232      kisshub.bat -p vara-fm      kisshub.bat -p tm-d710-9k6
+;   kisshub.bat -l            lists the TNC sections of this file
+; Keep only the TNCs you use, rename them or add your own (e.g. [pk232-hf]).
 ;
-; profile = direwolf: Direwolf's KISS port. kisshub reads KISSPORT, MODEM, TXDELAY,
-; PACLEN, MAXFRAME, EMAXFRAME from direwolf.conf (a folder or the file itself):
-direwolf_conf = C:\direwolf ; only used by profile direwolf
+; Keys of a TNC section:
+;   type          tnc | vara | direwolf | modem73 - the code behind it (REQUIRED)
+;   base          take all keys of another TNC section first, then the own ones
+;   display, notes, hint, start_note   texts for the start block and errors
+;   transport     serial | tcp;  serial: device, serial_baud, dtr, rts, rtscts
+;                                tcp: host (default 127.0.0.1), port
+;   reconnect_sec seconds between attempts when the TNC is lost
+;   prompt        the TNC's command prompt (e.g. cmd:) - what wake / init wait for
+;   step_timeout  seconds a wake / init step waits, unless the step says @<seconds>
+;   wake          tried one after the other until one gets an answer
+;   init          every line must get its answer; the last one enters KISS
+;   exit          sent after leaving KISS when kisshub stops (exit_kiss = yes)
+;   exit_kiss     yes: send C0 FF C0 on stop, then the exit lines
+;   settle_sec    pause after the init before the first KISS frame
+;   send_params   yes: send TXDELAY / persist / slottime as KISS commands
+;   smack         yes: KISS with CRC-16 (SMACK)
+;   hbaud         air rates the TNC is set to by its init line "HBAUD n" - air_baud
+;                 then replaces the rate in that line
+;   switch_positions  air rate -> position of a switch ON THE DEVICE (rate:position)
+;   air_baud, txdelay_ms, max_lead_ms, persist, slottime_ms   radio values
+;   paclen, maxframe, maxframe_ext, t1_min_sec, t1_max_sec, t2_sec (n2, t3_sec)
+;                 the AX.25 recommendation TinyBox and the client take over
 ;
-; profile = vara-fm / vara-hf (docs/kiss-mode-konzept.md 8c/8d): VARA Setup
-; "KISS interface" on (port 8100). VARA takes only UI frames as KISS type 0;
-; connected mode goes through VARA's type 2 ("Generic Data") - the station on the
-; other side needs kisshub too. Air values are measured (350 bit/s, 2700 ms).
-; vara_tunnel = connected  ; no | connected (UI stays type 0) | all
-; vara_bundle_ms = 0       ; >0: tunnelled frames within this time go as ONE type-2 frame
-;                          ; (experiment: no gain with VARA FM Narrow)
-; vara_bundle_max = 4000   ; bytes per bundle (VARA takes up to 5000)
+; Steps (wake, init, exit) - one per line, indented under the key:
+;   <send> [! <answer> ...] [@<seconds>]
+;   <CR> <LF> <xx> (two hex digits) are bytes, ^C is Ctrl-C, ^Q is XON
+;   init and exit lines get a CR at the end, wake lines do not
+;   ! cmd: AEA   counts as answered when one of these words comes back
+;   !-           expect nothing, only wait   (no ! at all: wait for the prompt)
 
-; profile = modem73: see [modem73] below - kisshub starts modem73 itself.
-
-[kiss]                     ; ALL OPTIONAL - the profile (or direwolf.conf) has the defaults
-; air_baud    =            ; vara-fm 350 | direwolf MODEM | others 1200
-;                          ; tm-d710: 1200 or 9600, sent to the TNC as HBAUD
-; txdelay_ms  =            ; vara-fm 2700 | direwolf TXDELAY | others 300
-; persist     = 63         ; hardware TNC only (sent as KISS P)
-; slottime_ms = 100
-; send_params =            ; default per profile: yes for TNCs, no for vara-* / direwolf
-;                          ; (must stay no with VARA: it would send KISS commands 1/2 on air)
-; max_lead_ms =            ; at most this much air time queued in the TNC, so acks overtake
-;                          ; long frames - vara 12000 | others 1500
-
-[ax25]                     ; OPTIONAL: change the recommendation TinyBox / client get
-; paclen / maxframe / maxframe_ext / n2 / t1_min_sec / t1_max_sec / t2_sec / t3_sec
-;                          ; default 1200 Bd: 256 / 4 / 7 / - / 3 / 30 / 1.5
-;                          ; vara-fm: 256 / 4 / 4 / - / 18 / 90 / 0.3
+[kisshub]
+profile = pk232            ; default when started without -p
 
 [server]
 port   = 8101              ; not 8001: that is Direwolf's KISS port
@@ -82,22 +63,317 @@ links_file = kisshub-links-{profile}.jsonl ; CR67: one JSON line per finished AX
 check = yes                ; once a day ask GitHub for a new TinyBox release (PLANUNG 24):
                            ; one warning line in the log, nothing is downloaded or installed
 
-[vara]                     ; only with profile vara-fm / vara-hf (CR67)
-monitor  = no              ; yes: listen on VARA's command port - read only, sends nothing.
-                           ; Ignored (with a hint) when another profile is started.
+
+; ======================================================================================
+; AEA PK-232 / PK-232MBX, VHF port 1200 Bd
+; From pk232py (oe3gas/pk232py), measured there on three devices (firmware 30.DEC.88,
+; 01.AUG.91, 13.SEP.95): 8N1, no XON/XOFF and no RTS/CTS, DTR and RTS HIGH (with them
+; low the TNC did not answer). Init after TRM 4.7.1 plus VHF ON / HBAUD 1200; EXPERT ON
+; first (RAWHDLC, HPOLL, PPERSIST are expert commands - without it "?EXPERT command").
+; Order checked on the device by Gerhard 14.10.2026, RESTART not needed. On the air
+; 14.10.2026 with device A, firmware 13.SEP.95. KISS ON gives no cmd: (17.10.2026).
+[pk232]
+type          = tnc
+display       = PK-232
+notes         = PK-232/PK-232MBX, VHF port 1200 Bd
+hint          =
+transport     = serial
+device        = COM3       ; Windows COM3, Raspberry Pi /dev/ttyUSB0
+serial_baud   = 9600       ; PC <-> TNC (its TBAUD; 9600 as pk232py uses it)
+dtr           = yes
+rts           = yes
+rtscts        = no
+reconnect_sec = 10
+prompt        = cmd:
+step_timeout  = 3
+wake          =
+    *                      ! cmd: AEA PK-232 Copyright  @2   ; autobaud after power-up
+    <CR>                   @1.5
+    ^C<CR>                 @2     ; COMMAND character, leaves Converse
+    ^Q<CR>                 @2     ; XON - a stray XOFF stops the TNC's output
+    <C0><FF><C0><00><00>   !-  @2 ; leave KISS (after a kisshub run)
+    <CR>                   @2
+    <01><01><4F>GG<17><01><4F>HON<17>  !-  @1   ; leave Host Mode (recovery + HOST OFF)
+    <CR>                   @2
+init          =
+    EXPERT ON
+    VHF ON
+    HBAUD 1200
+    AWLEN 8
+    PARITY 0
+    CONMODE TRANS
+    TRACE OFF
+    HID OFF
+    BEACON EVERY 0
+    PACKET
+    RAWHDLC ON
+    HPOLL OFF
+    PPERSIST ON
+    KISS ON                !-  @1     ; no cmd: of its own - only the echo
+    HOST ON                !-  @1.5   ; from here on KISS, no prompt
+exit_kiss     = yes        ; on Ctrl+C: leave KISS, so pk232py / a terminal finds cmd:
+exit          =
+    KISS OFF
+settle_sec    = 1
+send_params   = yes
+smack         = no
+air_baud      = 1200
+txdelay_ms    = 300
+persist       = 63
+slottime_ms   = 100
+max_lead_ms   = 1500       ; at most this much air time queued in the TNC
+paclen        = 256
+maxframe      = 4
+maxframe_ext  = 7
+t1_min_sec    = 3
+t1_max_sec    = 30
+t2_sec        = 1.5
+
+
+; ======================================================================================
+; Kenwood TM-D710, 1200 Bd. The TNC must be in packet mode first: TNC key on the panel
+; until PACKET shows - in APRS mode the TNC gives no cmd:. Tested by Gerhard in a
+; terminal 22.10.2026, COM7 at 9600 Bd: HBAUD 1200 / KISS ON / RESTART. RESTART reboots
+; the TNC into KISS (no prompt any more). RTS/CTS: the radio holds CTS low while its
+; small TNC buffer is full (25.10.2026). Leaving: C0 FF C0, then KISS OFF.
+[tm-d710]
+type          = tnc
+display       = TM-D710
+notes         = Kenwood TM-D710: TNC key -> packet mode first, 1200 Bd on the data band
+hint          = TM-D710: press the TNC key until PACKET shows (not APRS), PC port = COM speed of the radio menu (9600)
+transport     = serial
+device        = COM7
+serial_baud   = 9600       ; COM speed in the radio menu
+dtr           = yes
+rts           = yes
+rtscts        = yes        ; the radio paces kisshub over CTS
+reconnect_sec = 10
+prompt        = cmd:
+step_timeout  = 3
+wake          =
+    <CR>                   @2
+    <C0><FF><C0><CR>       @3     ; leave KISS
+    ^C<CR>                 @2     ; Converse
+    ^Q<CR>                 @2     ; XON
+init          =
+    HBAUD 1200                    ; replaced by air_baud (hbaud below)
+    KISS ON                !-  @1
+    RESTART                !-  @2
+exit_kiss     = yes
+exit          =
+    KISS OFF
+settle_sec    = 2
+send_params   = yes
+smack         = no
+hbaud         = 1200 9600
+air_baud      = 1200
+txdelay_ms    = 300
+persist       = 63
+slottime_ms   = 100
+max_lead_ms   = 1500
+paclen        = 256
+maxframe      = 4
+maxframe_ext  = 7
+t1_min_sec    = 3
+t1_max_sec    = 30
+t2_sec        = 1.5
+
+; TM-D710 at 9600 Bd on the data band (25.10.2026): a full window of 4-7 frames is on
+; the air in ~1-2 s, so T1 may start lower, T2 shorter - a starting point, still to be
+; checked on the air.
+[tm-d710-9k6]
+base          = tm-d710
+notes         = Kenwood TM-D710: TNC key -> packet mode first, 9600 Bd on the data band
+air_baud      = 9600       ; goes to the TNC as HBAUD 9600
+maxframe      = 7
+maxframe_ext  = 7
+t1_min_sec    = 1.5
+t1_max_sec    = 15
+t2_sec        = 0.5
+
+
+; ======================================================================================
+; TNC7multi (IfD Guettner, TOS 1.04 - from the handbook V1.04, 29.10.2026)
+; KISS/SMACK is a firmware mode chosen with the ROTARY SWITCH, there is no terminal
+; dialog: "1k2" = KISS 1200 Bd AFSK, "9k6" = KISS 9600 Bd FSK; each turn restarts the
+; TNC, C0 FF C0 means nothing to it. PC side: USB (FTDI virtual COM port, 115200 Bd) or
+; RS232 (null modem, 38400 Bd), 8N1. SMACK: the TNC follows the first CRC frame by
+; itself. TXDELAY 150 / P 64 / SlotTime 50 are the TNC's own defaults (handbook 4.1).
+[tnc7multi]
+type          = tnc
+display       = TNC7multi
+notes         = TNC7multi (IfD), KISS/SMACK - rotary switch 1k2
+start_note    = rotary switch on {switch} (KISS {air_baud} Bd); PC port USB 115200 / RS232 38400 Bd unless changed in Conf mode
+transport     = serial
+device        = COM8
+serial_baud   = 115200     ; USB default; RS232 (null modem cable): 38400
+dtr           = yes
+rts           = yes
+rtscts        = no
+reconnect_sec = 10
+exit_kiss     = no         ; KISS is the switch position, not a command
+settle_sec    = 0.3
+send_params   = yes
+smack         = yes        ; KISS with CRC-16
+switch_positions = 1200:1k2 9600:9k6   ; set ON THE DEVICE - kisshub cannot check it
+air_baud      = 1200
+txdelay_ms    = 150
+persist       = 64
+slottime_ms   = 50
+max_lead_ms   = 1500
+paclen        = 256
+maxframe      = 4
+maxframe_ext  = 7
+t1_min_sec    = 3
+t1_max_sec    = 30
+t2_sec        = 1.5
+
+[tnc7multi-9k6]
+base          = tnc7multi
+notes         = TNC7multi (IfD), KISS/SMACK - rotary switch 9k6
+air_baud      = 9600       ; only with the switch on 9k6
+maxframe      = 7
+maxframe_ext  = 7
+t1_min_sec    = 1.5
+t1_max_sec    = 15
+t2_sec        = 0.5
+
+
+; ======================================================================================
+; TNCs that are in KISS by themselves - nothing to send. Lines from the manuals,
+; still to be tried (K9/K10).
+[th-d74]
+type          = tnc
+display       = TH-D74
+notes         = Kenwood TH-D74: KISS on in the menu
+transport     = serial
+device        = COM4
+serial_baud   = 9600
+reconnect_sec = 10
+exit_kiss     = no
+settle_sec    = 1
+send_params   = yes
+air_baud      = 1200
+txdelay_ms    = 300
+persist       = 63
+slottime_ms   = 100
+max_lead_ms   = 1500
+paclen        = 256
+maxframe      = 4
+maxframe_ext  = 7
+t1_min_sec    = 3
+t1_max_sec    = 30
+t2_sec        = 1.5
+
+[th-d75]
+base          = th-d74
+display       = TH-D75
+notes         = Kenwood TH-D75: KISS on in the menu
+
+[tnc2-kiss]
+base          = th-d74
+display       = TNC2
+notes         = TNC2 with pure KISS EPROM
+
+[generic]
+base          = th-d74
+display       = KISS TNC
+notes         = already in KISS
+
+
+; ======================================================================================
+; VARA FM (EA5HVK): KISS-TCP on port 8100 ("KISS interface" in VARA Setup).
+; Not a transparent TNC: VARA takes only UI frames as KISS type 0 - SABM/I/RR are refused
+; with "Wrong KISS frame" (17.10.2026). kisshub tunnels connected mode in type 2
+; ("Generic Data") - the station on the other side needs kisshub too. VARA does its own
+; channel access: send_params must stay no (it would send KISS commands 1/2 on the air).
+; Air values measured 18.10.2026 (docs/kiss-mode-konzept.md 8d): about 350 bit/s net,
+; 2.7 s from PTT to data - a window of 4 x 256 bytes takes ~9 s, so T1 not below 18 s.
+[vara-fm]
+type          = vara
+display       = VARA FM
+notes         = VARA FM KISS-TCP (port 8100), connected mode tunnelled in type 2
+transport     = tcp
+host          = 127.0.0.1  ; VARA on another PC: its address
+port          = 8100
+reconnect_sec = 10
+settle_sec    = 0.2
+send_params   = no
+vara_tunnel   = connected  ; no | connected (UI stays type 0) | all
+vara_bundle_ms  = 0        ; >0: tunnelled frames within this time go as ONE type-2 frame
+                           ; (experiment: no gain with VARA FM Narrow)
+vara_bundle_max = 4000     ; bytes per bundle (VARA takes up to 5000)
+vara_monitor  = no         ; yes: listen on VARA's command port - read only, sends nothing.
                            ; Gives real PTT times per burst, waiting before PTT, BUSY share,
                            ; SN per received frame. FIRST TIME WITH SOMEBODY AT THE RADIO:
                            ; older VARA versions left the PTT keyed with KISS + command port.
-; host   = 127.0.0.1       ; default: [tnc] host
-cmd_port = 8300            ; VARA Setup "Command"
-sn_window_ms = 1500        ; an SN line belongs to a frame received this close to it
+; vara_host   = 127.0.0.1  ; default: host
+vara_cmd_port = 8300       ; VARA Setup "Command"
+vara_sn_window_ms = 1500   ; an SN line belongs to a frame received this close to it
+air_baud      = 350
+txdelay_ms    = 2700
+max_lead_ms   = 12000
+paclen        = 256
+maxframe      = 4
+maxframe_ext  = 4
+t1_min_sec    = 18
+t1_max_sec    = 90
+t2_sec        = 0.3        ; VARA is lossless
 
-[modem73]                  ; only with profile modem73 (tools/modem73/README.md)
-; kisshub starts modem73 (headless) with these values, waits for its KISS port and
-; stops it again with Ctrl+C. Air time, PACLEN and the AX.25 recommendation follow from
-; modulation / code_rate / frame - [kiss] air_baud / txdelay_ms are not used.
+[vara-hf]
+base          = vara-fm
+display       = VARA HF
+notes         = VARA HF KISS-TCP (port 8100), connected mode tunnelled in type 2
+
+
+; ======================================================================================
+; Direwolf's KISS port (CR70): a modem without a TNC dialog. kisshub reads KISSPORT,
+; MODEM, TXDELAY, PACLEN, MAXFRAME, EMAXFRAME from direwolf.conf - what is set there WINS,
+; because Direwolf really runs with it. The values below are used where direwolf.conf
+; sets nothing (port, air_baud, txdelay_ms, paclen, maxframe, maxframe_ext); the start
+; block shows where each value came from. Direwolf keeps its KISS parameters from its
+; own file - send_params no.
+[direwolf]
+type          = direwolf
+display       = Direwolf
+notes         = Direwolf KISS-TCP (KISSPORT), values from direwolf.conf
+direwolf_conf = C:\direwolf ; the Direwolf folder or its direwolf.conf
+transport     = tcp
+host          = 127.0.0.1
+port          = 8001       ; if direwolf.conf has no KISSPORT
+reconnect_sec = 10
+settle_sec    = 0.2
+send_params   = no
+air_baud      = 1200       ; if no MODEM
+txdelay_ms    = 300        ; if no TXDELAY
+max_lead_ms   = 1500
+paclen        = 256        ; if no PACLEN
+maxframe      = 4          ; if no MAXFRAME
+maxframe_ext  = 7          ; if no EMAXFRAME
+t1_min_sec    = 3
+t1_max_sec    = 30
+t2_sec        = 1.5
+
+
+; ======================================================================================
+; modem73 (RFnexus, OFDM soundcard modem, tools/modem73/README.md): kisshub starts it
+; (headless) with these values, waits for its KISS port and stops it with Ctrl+C.
+; Air time, PACLEN and the AX.25 recommendation follow from modulation / code_rate /
+; frame - no air_baud / txdelay_ms here; paclen ... t2_sec may still override.
 ; BOTH stations need modem73 - 1200 Bd stations and digis do not hear it.
 ; Direwolf off first: modem73 needs the sound card for itself.
+; Port 8011: 8001 is Direwolf's KISS port, 8101 kisshub's own.
+[modem73]
+type          = modem73
+display       = modem73
+notes         = modem73 KISS-TCP (port 8011), started by kisshub
+transport     = tcp
+host          = 127.0.0.1
+port          = 8011
+reconnect_sec = 10
+settle_sec    = 0.2
+send_params   = no
+; max_lead_ms =            ; default: one full burst (csma_burst frames)
 callsign      = N0CALL     ; YOUR callsign, no SSID - modem73 puts it into every OFDM frame
 ; start       = yes        ; no: modem73 is started by hand / elsewhere, kisshub only connects
 exe           = modem73.exe ; path to modem73.exe (relative: to this file's folder)
@@ -124,19 +400,3 @@ csma_burst    = 4          ; frames per key-up 1..4 - also the AX.25 window (max
 ; extra_args  =            ; further modem73 options, space separated
 ; log_output  = info       ; modem73's own lines in this log: info | debug | off
 ;                          ; (TX/RX lines per frame only at debug)
-
-; Per-profile overrides - only what differs, e.g.
-; [tnc.tm-d710]            ; Kenwood TM-D710: kisshub.bat -p tm-d710
-; device = COM7            ; TNC key -> PACKET first; kisshub sends HBAUD <air_baud> /
-;                          ; KISS ON / RESTART, on stop C0 FF C0 + KISS OFF
-; [kiss.tm-d710]
-; air_baud = 9600          ; 1200 (default) or 9600 - goes to the TNC as HBAUD
-; [tnc.tnc7multi]          ; TNC7multi: kisshub.bat -p tnc7multi - rotary switch on 1k2
-; device = COM8            ; (9k6 for 9600 Bd); USB = FTDI virtual COM port
-; serial_baud = 115200     ; USB default; RS232 (null modem cable): 38400
-; [kiss.tnc7multi]         ; defaults = the TNC's own: TXDELAY 150, P 64, SlotTime 50
-; air_baud = 9600          ; only with the switch on 9k6 - kisshub cannot set it
-; [kiss.pk232]
-; txdelay_ms = 400
-; [tnc.vara-fm]
-; host = 192.168.1.20      ; VARA on another PC

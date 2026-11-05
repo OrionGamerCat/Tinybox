@@ -18,7 +18,7 @@ from pathlib import Path
 from prcore import release, termcolor
 
 from . import VERSION
-from .config import ConfigError, load, make_transport, radio_lines
+from .config import ConfigError, load, make_transport, profile_list, radio_lines
 from .console import Console, LogControl
 from .hub import Hub
 from .tnc import Tnc
@@ -144,31 +144,20 @@ them from its status query on port + 1.
 """
 
 EPILOG = """\
-profiles:
-  pk232      AEA PK-232 / PK-232MBX, serial ([tnc] device), 1200 Bd
-  tm-d710    Kenwood TM-D710 (TNC key -> packet mode first), serial
-  tnc7multi  TNC7multi (IfD), rotary switch 1k2/9k6, USB 115200, SMACK
-  th-d74     Kenwood TH-D74, KISS on in the menu, serial / Bluetooth
-  th-d75     Kenwood TH-D75, KISS on in the menu, serial / Bluetooth
-  tnc2-kiss  TNC2 with a pure KISS EPROM, serial
-  generic    any TNC already in KISS (serial or tcp)
-  vara-fm    VARA FM, KISS-TCP 8100, connected mode tunnelled (both stations!)
-  vara-hf    VARA HF, the same
-  direwolf   Direwolf's KISSPORT, values from [tnc] direwolf_conf
-  modem73    modem73 OFDM modem (KISS-TCP 8011), kisshub starts it from [modem73]
-
-one kisshub.conf for all TNCs:
-  -p PROFILE overrides [tnc] profile. A section [<section>.<profile>]
-  (e.g. [kiss.pk232], [tnc.vara-fm]) overrides the plain section for that
-  profile only. {profile} in [log] file / links_file becomes the profile
-  name, e.g. file = kisshub-{profile}.log. [vara] monitor is ignored with
-  other profiles than vara-fm / vara-hf.
+profiles = the TNC sections of kisshub.conf (kisshub 2026.11.05):
+  Every TNC has its own section with ALL its values - port, wake / init dialog,
+  radio values, AX.25 recommendation. The section name is the profile name:
+  [pk232] -> kisshub.bat -p pk232. type = tnc | vara | direwolf | modem73 picks
+  the code behind it; base = <other section> takes the keys of another TNC first
+  (e.g. [tm-d710-9k6] with base = tm-d710 and only the 9600 Bd values).
+  Global sections: [kisshub] profile (default without -p), [server], [log],
+  [console], [update]. {profile} in [log] file / links_file = the profile name.
+  kisshub -l lists the TNC sections of the conf.
 
 examples:
   kisshub.bat -p pk232
   kisshub.bat -p vara-fm
-  kisshub.bat -p direwolf
-  kisshub.bat -p modem73
+  kisshub.bat -l
   python -m kisshub -c kisshub-test.conf -p generic
 
 While it runs, type H in the window for the console commands (S status,
@@ -178,7 +167,6 @@ More: MANUAL.md section 2.4 and 3, kisshub.conf.example.
 
 
 def parser() -> argparse.ArgumentParser:
-    from .profiles import PROFILES
     ap = argparse.ArgumentParser(prog="kisshub", description=HELP, epilog=EPILOG,
                                  add_help=False,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -186,14 +174,26 @@ def parser() -> argparse.ArgumentParser:
                     help="show this help and exit")
     ap.add_argument("-c", "--config", default="kisshub.conf", metavar="FILE",
                     help="configuration file (default: kisshub.conf)")
-    ap.add_argument("-p", "--profile", choices=sorted(PROFILES), metavar="PROFILE",
-                    help="TNC profile, overrides [tnc] profile (see below)")
+    ap.add_argument("-p", "--profile", metavar="PROFILE",
+                    help="TNC section of the conf to use, overrides [kisshub] profile")
+    ap.add_argument("-l", "--list", action="store_true",
+                    help="list the TNC sections (profiles) of the conf and exit")
     ap.add_argument("-V", "--version", action="version", version=f"kisshub {VERSION}")
     return ap
 
 
 def run(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    if args.list:
+        try:
+            rows = profile_list(args.config)
+        except ConfigError as exc:
+            print(f"{TAG} [ERROR] {exc}", file=sys.stderr)
+            return 2
+        width = max((len(r[0]) for r in rows), default=4)
+        for name, ptype, notes in rows:
+            print(f"  {name:<{width}}  {ptype:<8}  {notes}")
+        return 0
     try:
         cfg = load(args.config, args.profile)
     except ConfigError as exc:

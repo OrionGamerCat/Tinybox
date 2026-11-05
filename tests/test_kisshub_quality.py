@@ -194,13 +194,16 @@ class StartLinesTests(unittest.TestCase):
         from prcore import termcolor
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "k.conf"
-            p.write_text("[tnc]\nprofile=generic\ntransport=tcp\nport=8001\n"
-                         "[log]\nlinks_file =\n", encoding="utf-8")
+            tnc = ("[kisshub]\nprofile = generic\n[generic]\ntype = tnc\ntransport = tcp\n"
+                   "port = 8001\nreconnect_sec = 10\nsettle_sec = 1\nsend_params = no\n"
+                   "exit_kiss = no\nair_baud = 1200\ntxdelay_ms = 300\nmax_lead_ms = 1500\n"
+                   "paclen = 256\nmaxframe = 4\nmaxframe_ext = 7\nt1_min_sec = 3\n"
+                   "t1_max_sec = 30\nt2_sec = 1.5\n")
+            p.write_text(tnc + "[log]\nlinks_file =\n", encoding="utf-8")
             text = "\n".join(termcolor.kv_plain(*x) for x in log_lines(str(p), hubconfig.load(p)))
             self.assertIn("NO log file", text)
             self.assertRegex(text, r"Links file: +off")
-            p.write_text("[tnc]\nprofile=generic\ntransport=tcp\nport=8001\n"
-                         "[log]\nfile = kisshub-dw.log\nlinks_file = links-dw.jsonl\n",
+            p.write_text(tnc + "[log]\nfile = kisshub-dw.log\nlinks_file = links-dw.jsonl\n",
                          encoding="utf-8")
             text = "\n".join(termcolor.kv_plain(*x) for x in log_lines(str(p), hubconfig.load(p)))
             self.assertIn("kisshub-dw.log  (level INFO)", text)
@@ -210,7 +213,7 @@ class StartLinesTests(unittest.TestCase):
 class _NoTnc:
     """Enough of a Tnc for a Hub that is never started."""
     from kisshub import profiles as _p
-    profile = _p.GENERIC
+    profile = _p.Profile(name="generic")
     ready = asyncio.Event
 
     @staticmethod

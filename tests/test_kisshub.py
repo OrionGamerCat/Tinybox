@@ -27,8 +27,30 @@ from prcore.ax25 import frame as ax
 from prcore import kiss
 
 ROOT = Path(__file__).resolve().parent.parent
+EXAMPLE = (ROOT / "kisshub.conf.example").read_text(encoding="utf-8")
+PK_HOST_OFF = bytes((0x01, 0x4F, ord("H"), ord("O"), ord("N"), 0x17))   # PK-232 Host Mode
 EXPERT_ONLY = {"RAWHDLC", "HPOLL", "PPERSIST"}
 BANNER = b"\r\nAEA PK-232M Data Controller\r\nRelease 13.SEP.95\r\ncmd:"
+
+
+def load_conf(text: str, profile: str | None = None, dw: str | None = None):
+    """Load a kisshub.conf text; DWDIR becomes a folder with direwolf.conf = dw."""
+    with tempfile.TemporaryDirectory() as d:
+        if dw is not None:
+            (Path(d) / "direwolf.conf").write_text(dw, encoding="utf-8")
+        p = Path(d) / "k.conf"
+        p.write_text(text.replace("DWDIR", d), encoding="utf-8")
+        return hubconfig.load(p, profile)
+
+
+def example(profile: str | None = None, extra: str = "", dw: str | None = None):
+    """kisshub.conf.example, plus own sections (e.g. [t] with base = pk232)."""
+    return load_conf(EXAMPLE.replace("C:\\direwolf", "DWDIR") + "\n" + extra, profile,
+                     dw if dw is not None else "")
+
+
+def example_profile(name: str) -> profiles.Profile:
+    return example(name).tnc.profile
 
 
 def fast(p: profiles.Profile, factor: float = 0.1) -> profiles.Profile:
@@ -86,7 +108,7 @@ class FakePK232:
             return
         if self.state == "host":
             self._host += data
-            if profiles.PK_HOST_OFF in self._host:
+            if PK_HOST_OFF in self._host:
                 self.state, self._host = "cmd", bytearray()
             return
         for b in data:
@@ -145,7 +167,7 @@ class FakePK232:
 
 
 class HubTestBase(unittest.IsolatedAsyncioTestCase):
-    profile = fast(profiles.PK232)
+    profile = fast(example_profile("pk232"))
 
     async def start_hub(self, fake: FakePK232, **hubkw) -> Hub:
         self.fake = fake
@@ -200,7 +222,7 @@ class TncDialogTests(HubTestBase):
     async def test_init_from_command_mode(self):
         await self.start_hub(FakePK232("cmd"))
         await asyncio.wait_for(self.hub.tnc.ready.wait(), 5)
-        self.assertEqual(self.fake.lines, [s.note for s in profiles.PK232.init])
+        self.assertEqual(self.fake.lines, [s.note for s in example_profile("pk232").init])
         self.assertIn("VHF ON", self.fake.lines)
         self.assertEqual(self.fake.lines[0], "EXPERT ON")
         self.assertEqual(self.fake.lines[-2:], ["KISS ON", "HOST ON"])
@@ -433,7 +455,7 @@ class FakeTMD710(FakePK232):
 
 
 class TmD710Tests(HubTestBase):
-    profile = fast(profiles.TM_D710)
+    profile = fast(example_profile("tm-d710"))
 
     async def test_init_hbaud_kiss_restart(self):
         await self.start_hub(FakeTMD710("cmd"))
@@ -584,80 +606,140 @@ class RtsCtsWriterTests(unittest.TestCase):
 
 
 class HubConfigTests(unittest.TestCase):
-    def load(self, text: str):
-        with tempfile.TemporaryDirectory() as d:
-            p = Path(d) / "k.conf"
-            p.write_text(text, encoding="utf-8")
-            return hubconfig.load(p)
+    """kisshub 2026.11.05: one section per TNC, every value from the conf."""
 
-    def test_example(self):
+    def test_example_default_profile(self):
         cfg = hubconfig.load(ROOT / "kisshub.conf.example")
         self.assertEqual((cfg.tnc.profile.name, cfg.tnc.device, cfg.hub.port),
                          ("pk232", "COM3", 8101))
         self.assertEqual(cfg.tnc.params[kiss.CMD_TXDELAY], 30)
 
+    def test_example_every_tnc_loads(self):
+        names = [n for n, _, _ in hubconfig.profile_list(ROOT / "kisshub.conf.example")]
+        self.assertEqual(names, ["pk232", "tm-d710", "tm-d710-9k6", "tnc7multi",
+                                 "tnc7multi-9k6", "th-d74", "th-d75", "tnc2-kiss", "generic",
+                                 "vara-fm", "vara-hf", "direwolf", "modem73"])
+        for name in names:
+            if name == "modem73":               # N0CALL in the example - its own test
+                continue
+            with self.subTest(name):
+                self.assertEqual(example(name).tnc.profile.name, name)
+
+    def test_pk232_dialog_from_conf(self):
+        p = example_profile("pk232")
+        self.assertEqual(p.wake[0], profiles.Step(
+            b"*", (b"cmd:", b"AEA", b"PK-232", b"Copyright"), 2.0, "*"))
+        self.assertEqual(p.wake[4].send, b"\xc0\xff\xc0\x00\x00")
+        self.assertEqual(p.wake[4].expect, ())
+        self.assertEqual(p.wake[6].send, bytes((1, 1, 0x4F, 71, 71, 0x17)) + PK_HOST_OFF)
+        self.assertEqual(p.init[0], profiles.Step(b"EXPERT ON\r", (b"cmd:",), 3.0, "EXPERT ON"))
+        self.assertEqual(p.init[-1], profiles.Step(b"HOST ON\r", (), 1.5, "HOST ON"))
+        self.assertEqual([s.send for s in p.exit_lines], [b"KISS OFF\r"])
+        self.assertEqual((p.exit_kiss, p.dtr, p.rts, p.rtscts), (True, True, True, False))
+
     def test_example_tm_d710(self):
-        text = (ROOT / "kisshub.conf.example").read_text(encoding="utf-8")
-        text = text.replace("; [tnc.tm-d710]", "[tnc.tm-d710]").replace("; device = COM7", "device = COM7")
-        with tempfile.TemporaryDirectory() as d:
-            p = Path(d) / "k.conf"
-            p.write_text(text, encoding="utf-8")
-            cfg = hubconfig.load(p, "tm-d710")
+        cfg = example("tm-d710")
         self.assertEqual((cfg.tnc.profile.name, cfg.tnc.device, cfg.tnc.serial_baud),
                          ("tm-d710", "COM7", 9600))
         self.assertEqual([s.note for s in cfg.tnc.profile.init], ["HBAUD 1200", "KISS ON", "RESTART"])
-
-    def d710(self, extra: str = ""):
-        return self.load("[tnc]\nprofile=tm-d710\ndevice=COM7\n" + extra)
-
-    def test_tm_d710_hbaud_default_1200(self):
-        cfg = self.d710()
-        self.assertEqual([s.note for s in cfg.tnc.profile.init], ["HBAUD 1200", "KISS ON", "RESTART"])
         self.assertEqual(cfg.hub.ax25["t1_min_sec"], 3.0)
+        self.assertEqual(cfg.hub.sources["air_baud"], "kisshub.conf [tm-d710]")
 
-    def test_tm_d710_hbaud_9600(self):
-        cfg = self.d710("[kiss.tm-d710]\nair_baud = 9600\n")
+    def test_tm_d710_9600_via_base(self):
+        cfg = example("tm-d710-9k6")
         init = cfg.tnc.profile.init
         self.assertEqual([s.note for s in init], ["HBAUD 9600", "KISS ON", "RESTART"])
-        self.assertEqual(init[0].send, b"HBAUD 9600\r")
-        self.assertEqual(init[0].expect, profiles.TM_D710.init[0].expect)
-        self.assertEqual((cfg.hub.air_baud, cfg.hub.sources["air_baud"]), (9600, "kisshub.conf"))
+        self.assertEqual((init[0].send, init[0].expect), (b"HBAUD 9600\r", (b"cmd:",)))
         self.assertEqual((cfg.hub.ax25["maxframe"], cfg.hub.ax25["t1_min_sec"]), (7, 1.5))
+        self.assertEqual((cfg.tnc.device, cfg.tnc.rtscts), ("COM7", True))   # from base
 
     def test_tm_d710_hbaud_invalid(self):
         with self.assertRaises(hubconfig.ConfigError) as cm:
-            self.d710("[kiss]\nair_baud = 4800\n")
+            example("t", "[t]\nbase = tm-d710\nair_baud = 4800\n")
         self.assertIn("1200 or 9600", str(cm.exception))
 
-    def test_tm_d710_init_lines_win(self):
-        cfg = self.d710("init_lines = HBAUD 1200 | KISS ON\n[kiss]\nair_baud = 4800\n")
-        self.assertEqual([s.note for s in cfg.tnc.profile.init], ["HBAUD 1200", "KISS ON"])
-
     def test_pk232_hbaud_stays_fixed(self):
-        cfg = self.load("[tnc]\nprofile=pk232\ndevice=COM6\n[kiss]\nair_baud=9600\n")
+        cfg = example("t", "[t]\nbase = pk232\nair_baud = 9600\n")
         self.assertIn("HBAUD 1200", [s.note for s in cfg.tnc.profile.init])
 
-    def test_rtscts_default_per_profile(self):
-        self.assertTrue(self.d710().tnc.rtscts)
-        self.assertFalse(self.load("[tnc]\nprofile=pk232\ndevice=COM6\n").tnc.rtscts)
-        self.assertFalse(self.d710("rtscts = no\n").tnc.rtscts)
-        cfg = self.load("[tnc]\nprofile=pk232\ndevice=COM6\n[tnc.pk232]\nrtscts = yes\n")
-        self.assertTrue(cfg.tnc.rtscts)
-        t = hubconfig.make_transport(self.d710().tnc)
+    def test_rtscts_from_the_section(self):
+        self.assertTrue(example("tm-d710").tnc.rtscts)
+        self.assertFalse(example("pk232").tnc.rtscts)
+        self.assertTrue(example("t", "[t]\nbase = pk232\nrtscts = yes\n").tnc.rtscts)
+        t = hubconfig.make_transport(example("tm-d710").tnc)
         self.assertEqual((t.rtscts, t.describe()), (True, "COM7 9600 Bd RTS/CTS"))
 
-    def test_init_lines_override(self):
-        cfg = self.load("[tnc]\nprofile=generic\ntransport=tcp\nport=4001\n"
-                        "init_lines = A ONE | B TWO | KISS ON\n")
-        self.assertEqual([s.note for s in cfg.tnc.profile.init], ["A ONE", "B TWO", "KISS ON"])
-        self.assertEqual(cfg.tnc.profile.init[-1].expect, ())
+    def test_own_profile_name_and_dialog(self):
+        cfg = example("my-tnc", "[my-tnc]\nbase = generic\ntransport = tcp\nport = 4001\n"
+                                "prompt = cmd:\nstep_timeout = 2\n"
+                                "init =\n    A ONE\n    B TWO  ! OK  @5\n    KISS ON  !-\n")
+        p = cfg.tnc.profile
+        self.assertEqual((p.name, cfg.tnc.port, p.notes), ("my-tnc", 4001, "already in KISS"))
+        self.assertEqual([(s.send, s.expect, s.timeout) for s in p.init],
+                         [(b"A ONE\r", (b"cmd:",), 2.0), (b"B TWO\r", (b"OK",), 5.0),
+                          (b"KISS ON\r", (), 2.0)])
+        self.assertEqual(cfg.log_file, "kisshub-my-tnc.log")
+
+    def test_notation(self):
+        self.assertEqual(profiles.encode("^C<CR>x<c0><LF>^q"), b"\x03\rx\xc0\n\x11")
+        st = profiles.parse_steps("  <CR>  @1.5\n\n  *  ! a b\n", cr=False, prompt="cmd:",
+                                  timeout=3.0, what="w")
+        self.assertEqual(st, (profiles.Step(b"\r", (b"cmd:",), 1.5, "<CR>"),
+                              profiles.Step(b"*", (b"a", b"b"), 3.0, "*")))
+        with self.assertRaises(profiles.ProfileError):           # no prompt to wait for
+            profiles.parse_steps("X", cr=True, prompt="", timeout=1, what="w")
+        with self.assertRaises(profiles.ProfileError):
+            profiles.parse_steps("  ! cmd:", cr=True, prompt="cmd:", timeout=1, what="w")
+
+    def test_old_format_refused(self):
+        for text in ("[tnc]\nprofile=pk232\ndevice=COM1\n",
+                     "[pk232]\ntype=tnc\n[kiss.pk232]\ntxdelay_ms=400\n",
+                     "[ax25]\npaclen=128\n"):
+            with self.assertRaises(hubconfig.ConfigError, msg=text) as cm:
+                load_conf(text, "pk232")
+            self.assertIn("old format", str(cm.exception))
+
+    def test_missing_keys_named_together(self):
+        with self.assertRaises(hubconfig.ConfigError) as cm:
+            load_conf("[x]\ntype = tnc\ntransport = serial\n", "x")
+        msg = str(cm.exception)
+        for key in ("device", "serial_baud", "air_baud", "txdelay_ms", "paclen", "t2_sec",
+                    "send_params", "exit_kiss", "settle_sec"):
+            self.assertIn(key, msg)
+        # step_timeout only when there is a dialog
+        with self.assertRaises(hubconfig.ConfigError) as cm:
+            example("t", "[t]\nbase = th-d74\nstep_timeout =\ninit =\n    KISS ON !-\n")
+        self.assertIn("step_timeout", str(cm.exception))
 
     def test_invalid(self):
-        for text in ("[tnc]\nprofile=pk9999\ndevice=COM1\n", "[tnc]\nprofile=pk232\n",
-                     "[tnc]\nprofile=pk232\ntransport=tcp\n",
-                     "[tnc]\ndevice=COM1\n[kiss]\npersist=300\n"):
+        for text, profile in (
+                ("", "pk9999"),                                        # no such section
+                ("[t]\nbase = pk232\nwindow = 3\n", "t"),              # unknown key
+                ("[t]\nbase = pk232\nvara_tunnel = all\n", "t"),       # VARA key on a TNC
+                ("[t]\nbase = pk232\ntype = radio\n", "t"),            # unknown type
+                ("[t]\nbase = pk232\npersist = 300\n", "t"),
+                ("[t]\nbase = pk232\ntransport = tcp\n", "t"),         # no port
+                ("[t]\nbase = u\n[u]\nbase = t\n", "t"),                # base loop
+                ("[t]\nbase = nix\n", "t"),
+                ("[kisshub]\nprofil = pk232\n", None)):                 # [kisshub] typo
             with self.assertRaises(hubconfig.ConfigError, msg=text):
-                self.load(text)
+                example(profile, text)
+
+    def test_no_profile_given(self):
+        text = EXAMPLE.replace("profile = pk232", "")
+        with self.assertRaises(hubconfig.ConfigError) as cm:
+            load_conf(text)
+        self.assertIn("-p NAME", str(cm.exception))
+
+    def test_list(self):
+        import contextlib
+        import io
+        from kisshub.__main__ import run
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(run(["-c", str(ROOT / "kisshub.conf.example"), "-l"]), 0)
+        self.assertIn("vara-hf", out.getvalue())
+        self.assertIn("direwolf", out.getvalue())
 
 
 class FakeVara:
@@ -693,7 +775,7 @@ class FakeVara:
 
 
 class VaraTunnelTests(HubTestBase):
-    profile = profiles.VARA_FM
+    profile = example_profile("vara-fm")
 
     async def test_connected_frames_go_through_type_2(self):
         vara = FakeVara()
@@ -725,7 +807,7 @@ class VaraTunnelTests(HubTestBase):
 
     async def test_bundling(self):
         vara = FakeVara()
-        self.profile = dataclasses.replace(profiles.VARA_FM, bundle_ms=100, bundle_max=250)
+        self.profile = dataclasses.replace(example_profile("vara-fm"), bundle_ms=100, bundle_max=250)
         await self.start_hub(vara, max_lead_sec=60)
         await asyncio.wait_for(self.hub.tnc.ready.wait(), 5)
         w, got = await self.client()
@@ -755,7 +837,7 @@ class VaraTunnelTests(HubTestBase):
 
     async def test_all_and_no(self):
         vara = FakeVara()
-        self.profile = dataclasses.replace(profiles.VARA_FM, tunnel="all")
+        self.profile = dataclasses.replace(example_profile("vara-fm"), tunnel="all")
         await self.start_hub(vara)
         await asyncio.wait_for(self.hub.tnc.ready.wait(), 5)
         ui = ax.ui_frame("TEST", "OE3GAS", b"x").encode()
@@ -770,106 +852,78 @@ class VaraTunnelTests(HubTestBase):
 class RadioValuesTests(unittest.TestCase):
     """CR70: kisshub owns the radio values and tells where each one came from."""
 
-    def load(self, text: str, dw: str | None = None):
-        with tempfile.TemporaryDirectory() as d:
-            if dw is not None:
-                (Path(d) / "direwolf.conf").write_text(dw, encoding="utf-8")
-                text = text.replace("DWDIR", d)
-            p = Path(d) / "k.conf"
-            p.write_text(text, encoding="utf-8")
-            return hubconfig.load(p)
-
-    def test_vara_profile_defaults(self):
-        cfg = self.load("[tnc]\nprofile=vara-fm\n")          # transport tcp, port 8100 implied
+    def test_vara_values(self):
+        cfg = example("vara-fm")
         self.assertEqual((cfg.tnc.transport, cfg.tnc.port), ("tcp", 8100))
         h = cfg.hub
         self.assertEqual((h.air_baud, h.txdelay_sec, h.max_lead_sec), (350, 2.7, 12.0))
-        self.assertEqual(h.sources["air_baud"], "profile vara-fm")
+        self.assertEqual(h.sources["air_baud"], "kisshub.conf [vara-fm]")
         self.assertEqual((h.ax25["paclen"], h.ax25["maxframe"], h.ax25["t1_min_sec"]),
                          (256, 4, 18.0))
         self.assertEqual((h.status_port, cfg.hints), (8102, ()))
         text = "\n".join(termcolor.kv_plain(*x) for x in hubconfig.radio_lines(cfg))
-        self.assertIn("air_baud 350 (profile vara-fm)", text)
+        self.assertIn("air_baud 350 (kisshub.conf [vara-fm])", text)
 
     def test_overrides_and_old_keys(self):
-        cfg = self.load("[tnc]\nprofile=vara-fm\n[kiss]\nair_baud=600\n"
-                        "[ax25]\nt1_min_sec=25\n[server]\nport=8201\nstatus_port=8202\n")
-        h = cfg.hub
-        self.assertEqual((h.air_baud, h.sources["air_baud"]), (600, "kisshub.conf"))
-        self.assertEqual(h.ax25["t1_min_sec"], 25.0)
-        self.assertIn("kisshub.conf [ax25]", h.sources["ax25"])
-        self.assertEqual(h.status_port, 8202)
+        cfg = example("t", "[t]\nbase = vara-fm\nair_baud = 600\nt1_min_sec = 25\n"
+                           "port = 8100\n").hub
+        self.assertEqual((cfg.air_baud, cfg.ax25["t1_min_sec"]), (600, 25.0))
+        text = EXAMPLE.replace("port   = 8101", "port = 8201\nstatus_port = 8202")
+        cfg = load_conf(text, "vara-fm")
+        self.assertEqual(cfg.hub.status_port, 8202)
         self.assertIn("can be removed", cfg.hints[0])
-        self.assertEqual(self.load("[tnc]\nprofile=vara-fm\n[server]\nport=8201\n")
-                         .hub.status_port, 8202)
-        with self.assertRaises(hubconfig.ConfigError):
-            self.load("[tnc]\nprofile=vara-fm\n[ax25]\nwindow=3\n")
+        self.assertEqual(load_conf(EXAMPLE.replace("port   = 8101", "port = 8201"),
+                                   "vara-fm").hub.status_port, 8202)
 
-    def test_direwolf_profile(self):
+    def test_direwolf_conf_wins(self):
         dw = "MODEM 9600\nTXDELAY 15\nKISSPORT 8011\nPACLEN 200\nEMAXFRAME 6\n"
-        cfg = self.load("[tnc]\nprofile=direwolf\ndirewolf_conf=DWDIR\n", dw)
+        cfg = example("direwolf", dw=dw)
         self.assertEqual((cfg.tnc.transport, cfg.tnc.port, cfg.tnc.params), ("tcp", 8011, {}))
         h = cfg.hub
         self.assertEqual((h.air_baud, round(h.txdelay_sec * 1000)), (9600, 150))
         self.assertEqual(h.sources["txdelay_ms"], "direwolf.conf")
-        self.assertEqual((h.ax25["paclen"], h.ax25["maxframe_ext"]), (200, 6))
-        self.assertIn("MODEM 9600", "\n".join(termcolor.kv_plain(*x) for x in hubconfig.radio_lines(cfg)))
+        self.assertEqual((h.ax25["paclen"], h.ax25["maxframe"], h.ax25["maxframe_ext"]),
+                         (200, 4, 6))                      # MAXFRAME not set: the section's
+        self.assertIn("MODEM 9600", "\n".join(termcolor.kv_plain(*x)
+                                              for x in hubconfig.radio_lines(cfg)))
+        # nothing in direwolf.conf: the section's values
+        cfg = example("direwolf", dw="")
+        self.assertEqual((cfg.tnc.port, cfg.hub.air_baud, cfg.hub.sources["air_baud"]),
+                         (8001, 1200, "kisshub.conf [direwolf]"))
         with self.assertRaises(hubconfig.ConfigError):
-            self.load("[tnc]\nprofile=direwolf\n")
-        with self.assertRaises(hubconfig.ConfigError):
-            self.load("[tnc]\nprofile=direwolf\ndirewolf_conf=/nowhere/x\n")
+            example("t", "[t]\nbase = direwolf\ndirewolf_conf = /nowhere/x\n")
 
     def test_status_has_radio_block(self):
-        cfg = self.load("[tnc]\nprofile=vara-fm\n")
+        cfg = example("vara-fm")
         from tests.test_kisshub_quality import _NoTnc
         hub = Hub(dataclasses.replace(cfg.hub, port=0, status_port=0, links_file=""),
                   lambda on_frame: _NoTnc())
         r = hub.radio_dict()
         self.assertEqual((r["air_baud"], r["txdelay_ms"], r["profile"]), (350, 2700, "vara-fm"))
         self.assertEqual(r["ax25"]["t2_sec"], 0.3)
-        self.assertEqual(r["source"]["max_lead_ms"], "profile vara-fm")
+        self.assertEqual(r["source"]["max_lead_ms"], "kisshub.conf [vara-fm]")
 
 
 class OneConfTests(unittest.TestCase):
-    """One kisshub.conf for PK-232, VARA and Direwolf: -p, [<section>.<profile>], {profile}."""
+    """One kisshub.conf for all TNCs: -p picks the section, {profile} in file names."""
 
-    CONF = ("[tnc]\nprofile = pk232\ndevice = COM3\ndirewolf_conf = DWDIR\n"
-            "[tnc.vara-fm]\nhost = 127.0.0.2\n"
-            "[kiss.pk232]\ntxdelay_ms = 400\n"
-            "[log]\nfile = kisshub-{profile}.log\nlinks_file = links-{profile}.jsonl\n"
-            "[vara]\nmonitor = yes\n")
-
-    def load(self, profile=None, conf=None):
-        with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "direwolf.conf").write_text("KISSPORT 8001\nMODEM 1200\nTXDELAY 25\n",
-                                                   encoding="utf-8")
-            p = Path(d) / "k.conf"
-            p.write_text((conf or self.CONF).replace("DWDIR", d), encoding="utf-8")
-            return hubconfig.load(p, profile)
-
-    def test_three_profiles_one_file(self):
-        pk = self.load()
+    def test_profiles_one_file(self):
+        extra = EXAMPLE.replace("links_file = kisshub-links-{profile}.jsonl",
+                                "links_file = links-{profile}.jsonl")
+        pk = load_conf(extra)
         self.assertEqual((pk.tnc.profile.name, pk.tnc.transport, pk.tnc.device),
                          ("pk232", "serial", "COM3"))
-        self.assertEqual((round(pk.hub.txdelay_sec * 1000), pk.tnc.params[kiss.CMD_TXDELAY]),
-                         (400, 40))                        # [kiss.pk232]
         self.assertEqual((pk.log_file, pk.hub.links_file),
                          ("kisshub-pk232.log", "links-pk232.jsonl"))
-        self.assertFalse(pk.hub.vara_monitor)              # ignored, not an error
-        self.assertIn("monitor = yes: ignored", pk.hints[0])
-        va = self.load("vara-fm")
+        self.assertFalse(pk.hub.vara_monitor)
+        va = load_conf(extra.replace("vara_monitor  = no", "vara_monitor = yes")
+                       .replace("host          = 127.0.0.1  ; VARA", "host = 127.0.0.2  ; VARA"),
+                       "vara-fm")
         self.assertEqual((va.tnc.transport, va.tnc.host, va.tnc.port), ("tcp", "127.0.0.2", 8100))
-        self.assertEqual((va.hub.air_baud, round(va.hub.txdelay_sec * 1000)), (350, 2700))
-        self.assertTrue(va.hub.vara_monitor)
+        self.assertEqual((va.hub.vara_monitor, va.hub.vara_host), (True, "127.0.0.2"))
         self.assertEqual(va.log_file, "kisshub-vara-fm.log")
-        dw = self.load("direwolf")
-        self.assertEqual((dw.tnc.port, round(dw.hub.txdelay_sec * 1000)), (8001, 250))
-
-    def test_bad_section_and_profile(self):
-        with self.assertRaises(hubconfig.ConfigError):
-            self.load(conf="[tnc]\nprofile = pk232\ndevice = COM3\n[kiss.pk999]\nx = 1\n")
-        with self.assertRaises(hubconfig.ConfigError):
-            self.load("nix")
+        hf = load_conf(extra, "vara-hf")                    # base = vara-fm
+        self.assertEqual((hf.tnc.profile.display, hf.hub.air_baud), ("VARA HF", 350))
 
     def test_help(self):
         import contextlib
@@ -879,29 +933,21 @@ class OneConfTests(unittest.TestCase):
             out = io.StringIO()
             with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
                 parser().parse_args([opt])
-            self.assertIn("one kisshub.conf for all TNCs", out.getvalue())
-        self.assertEqual(parser().parse_args(["-p", "vara-fm"]).profile, "vara-fm")
+            self.assertIn("the TNC sections of kisshub.conf", out.getvalue())
+        self.assertEqual(parser().parse_args(["-p", "anything"]).profile, "anything")
 
 
 class VaraConfigTests(unittest.TestCase):
     def test_config(self):
-        with tempfile.TemporaryDirectory() as d:
-            p = Path(d) / "k.conf"
-            p.write_text("[tnc]\nprofile=vara-fm\ntransport=tcp\nport=8100\n", encoding="utf-8")
-            cfg = hubconfig.load(p)
-            self.assertEqual((cfg.tnc.profile.tunnel, cfg.tnc.params), ("connected", {}))
-            p.write_text("[tnc]\nprofile=vara-fm\ntransport=tcp\nport=8100\nvara_tunnel=all\n",
-                         encoding="utf-8")
-            self.assertEqual(hubconfig.load(p).tnc.profile.tunnel, "all")
-            # KISS parameters would be VARA frames of type 1/2 on the air
-            p.write_text("[tnc]\nprofile=vara-fm\ntransport=tcp\nport=8100\n"
-                         "[kiss]\nsend_params=yes\n", encoding="utf-8")
-            with self.assertRaises(hubconfig.ConfigError):
-                hubconfig.load(p)
-            p.write_text("[tnc]\nprofile=vara-fm\ntransport=tcp\nport=8100\nvara_tunnel=maybe\n",
-                         encoding="utf-8")
-            with self.assertRaises(hubconfig.ConfigError):
-                hubconfig.load(p)
+        cfg = example("vara-fm")
+        self.assertEqual((cfg.tnc.profile.tunnel, cfg.tnc.params), ("connected", {}))
+        self.assertEqual(example("t", "[t]\nbase = vara-fm\nvara_tunnel = all\n")
+                         .tnc.profile.tunnel, "all")
+        # KISS parameters would be VARA frames of type 1/2 on the air
+        for bad in ("send_params = yes", "vara_tunnel = maybe", "smack = yes",
+                    "transport = serial\ndevice = COM1\nserial_baud = 9600"):
+            with self.assertRaises(hubconfig.ConfigError, msg=bad):
+                example("t", f"[t]\nbase = vara-fm\n{bad}\n")
 
 
 if __name__ == "__main__":
@@ -1005,7 +1051,7 @@ class SmackTests(unittest.TestCase):
 
 
 class Tnc7Tests(HubTestBase):
-    profile = fast(profiles.TNC7MULTI)
+    profile = fast(example_profile("tnc7multi"))
 
     async def test_no_dialog_params_and_smack(self):
         await self.start_hub(FakeTNC7())
@@ -1064,14 +1110,8 @@ class Tnc7Tests(HubTestBase):
 
 
 class Tnc7ConfigTests(unittest.TestCase):
-    def load(self, text: str):
-        with tempfile.TemporaryDirectory() as d:
-            p = Path(d) / "k.conf"
-            p.write_text("[tnc]\nprofile=tnc7multi\ndevice=COM8\n" + text, encoding="utf-8")
-            return hubconfig.load(p)
-
-    def test_defaults_from_handbook(self):
-        cfg = self.load("")
+    def test_values_from_the_section(self):
+        cfg = example("tnc7multi")
         t = cfg.tnc
         self.assertEqual((t.serial_baud, t.rtscts, t.profile.smack, t.profile.exit_kiss),
                          (115200, False, True, False))
@@ -1084,7 +1124,7 @@ class Tnc7ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.hints, ())
 
     def test_9600_and_rs232(self):
-        cfg = self.load("serial_baud = 38400\nsmack = no\n[kiss]\nair_baud = 9600\n")
+        cfg = example("t", "[t]\nbase = tnc7multi-9k6\nserial_baud = 38400\nsmack = no\n")
         self.assertEqual((cfg.tnc.serial_baud, cfg.tnc.profile.smack), (38400, False))
         lines = dict((x[0], x[1]) for x in hubconfig.radio_lines(cfg))
         self.assertIn("9k6", lines["TNC7multi"])
@@ -1092,12 +1132,5 @@ class Tnc7ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.hub.ax25["maxframe"], 7)
 
     def test_other_rate_gives_a_hint(self):
-        cfg = self.load("[kiss]\nair_baud = 19200\n")
+        cfg = example("t", "[t]\nbase = tnc7multi\nair_baud = 19200\n")
         self.assertIn("extra modem", cfg.hints[0])
-
-    def test_smack_not_with_vara(self):
-        with tempfile.TemporaryDirectory() as d:
-            p = Path(d) / "k.conf"
-            p.write_text("[tnc]\nprofile=vara-fm\nsmack=yes\n", encoding="utf-8")
-            with self.assertRaises(hubconfig.ConfigError):
-                hubconfig.load(p)

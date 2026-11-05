@@ -11,7 +11,7 @@ SerialTransport uses pyserial with one reader and one writer thread: at
 Port settings as pk232py found them working on the PK-232 (P54.2): 8N1,
 no XON/XOFF, no RTS/CTS, DTR and RTS asserted.
 
-RTS/CTS (profile tm-d710, [tnc] rtscts = yes, 25.10.2026; reworked 26.10.2026):
+RTS/CTS (rtscts = yes in the TNC section, e.g. [tm-d710], 25.10.2026; reworked 26.10.2026):
 the radio holds CTS low while its buffer is full. The port driver is asked to
 stop on CTS (rtscts=True), but that alone is not enough - write() returns as
 soon as the bytes are in the operating system's buffer (kilobytes), and some

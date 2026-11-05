@@ -2,6 +2,14 @@
 
 ## Unveröffentlicht
 
+- kisshub 2026.11.05: **ein Abschnitt je TNC** in der `kisshub.conf` – alle Werte eines TNC
+  (Anschluss, Weck-/Init-/Exit-Dialog, Funkwerte, AX.25-Empfehlung) stehen in seinem eigenen
+  Abschnitt, z. B. `[pk232]`, `[tm-d710]`, `[vara-fm]`; im Programm stehen keine Gerätewerte
+  mehr. `type = tnc | vara | direwolf | modem73` wählt den Programmteil, `base = <abschnitt>`
+  übernimmt einen anderen Abschnitt (z. B. `[tm-d710-9k6]`). Eigene Profilnamen sind erlaubt,
+  `kisshub -l` listet sie. Fehlende Pflichtwerte werden alle auf einmal gemeldet. Beim Profil
+  `direwolf` gewinnt jetzt die `direwolf.conf`. **Die alte conf wird nicht mehr gelesen** –
+  Umstellung: MANUAL 2.4.
 - **Sysop-Web-GUI: Dashboard** – alle Fenster lassen sich einklappen (Klick auf den Titel oder
   das Dreieck); der Kopf mit Zähler/Status bleibt sichtbar, der Zustand wird im Browser
   gemerkt. „Connection log“ und „Stations (JLOG)“ stehen jetzt im Dashboard (links unter

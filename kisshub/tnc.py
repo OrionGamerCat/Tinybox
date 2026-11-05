@@ -8,7 +8,7 @@ Life cycle (repeats on every loss of the port):
                    -> KISS: frames to the hub, frames from the hub
     stop():        -> C0 FF C0 (leave KISS) and the profile's exit lines
 
-SMACK (profile tnc7multi, [tnc] smack): data frames go out with CRC-16
+SMACK (smack = yes in the TNC section, e.g. [tnc7multi]): data frames go out with CRC-16
 (kiss.encode_smack), the TNC switches over by itself and answers with CRC.
 Received frames with bit 7 in the type byte are checked whatever the setting
 (the TNC stays in SMACK until it restarts, also when kisshub restarts with

@@ -124,7 +124,7 @@ class Console:
             elif word in ("V", "VARA"):
                 v = self.hub.vara
                 self.out("\n".join(v.lines_text(self.hub.now())) if v is not None
-                         else "VARA monitor off ([vara] monitor = yes in kisshub.conf)")
+                         else "VARA monitor off (vara_monitor = yes in the VARA section of kisshub.conf)")
             elif word == "STATIONS":
                 self.cmd_stations()
             elif word in PARAMS:
@@ -180,7 +180,7 @@ class Console:
             value = self.tnc.params.get(cmd)
             if value is not None:
                 parts.append(f"{name} {value * unit}{' ms' if unit == 10 else ''}")
-        self.out("KISS parameters: " + (", ".join(parts) or "none sent ([kiss] send_params = no)"))
+        self.out("KISS parameters: " + (", ".join(parts) or "none sent (send_params = no)"))
 
     def cmd_set(self, name: str, arg: str) -> None:
         cmd, unit = PARAMS[name]
@@ -206,4 +206,4 @@ class Console:
                  else "set, goes to the TNC with the next init")
         if cmd == kiss.CMD_TXDELAY:
             self.out("TinyBox and client take it from the status query (CR70); "
-                     "for the next start put it into kisshub.conf [kiss] txdelay_ms")
+                     "for the next start put it into txdelay_ms in the TNC section of kisshub.conf")
