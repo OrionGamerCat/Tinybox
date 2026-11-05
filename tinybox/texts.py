@@ -204,6 +204,7 @@ RESTART_WARNING = ("*** System message from {sysop}: {mailbox} restarts in {left
 CONSOLE_BANNER = "*** TinyBox sysop console - type H for help ***"
 HELP_CONSOLE = [
     "Console:",
+    "  INFO       Start block again: version, calls, radio values, log, config",
     "  W          Who is connected",
     "  MON [ON|OFF]  Live monitor of user sessions",
     "  LOG        Log file, level and debug components",

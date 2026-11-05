@@ -10,6 +10,9 @@ neu ist, steht kurz in tbclient/news/<Version>.txt - das geht als
 Bulletin in die Rubrik TBNEWS.)
 
 Zuletzt dazugekommen
+- Konsole im tbclient-Fenster: I / INFO zeigt den Startblock noch einmal
+  (Rufzeichen, TinyBox, Verbindung, Funkwerte, Web-GUI), H = Hilfe. Was im
+  Terminal der Web-GUI getippt wird, geht wie bisher an die TinyBox.
 - AXUDP-Werte einstellbar: [tinybox] axudp_paclen, axudp_maxframe,
   axudp_t1_sec, axudp_n2 (Standard 256 / 32 / 3 / 10, ohne Sendezeit). Fuer
   einen langsamen Weg wie den simulierten 1200-Bd-Kanal des Testbeds

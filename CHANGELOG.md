@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+- **INFO in den Konsolen:** TinyBox-Sysop-Konsole `INFO` (nur so – `I` bleibt der
+  Profil-Befehl der Mailbox) und neue Konsole im tbclient-Fenster mit `I` / `INFO` und
+  `H` (Client 2026.11.05): der Startblock noch einmal, beim Client mit den Funkwerten, die
+  sonst nur mit `-v` kommen.
 - kisshub 2026.11.05.2: Konsolenbefehl **`I` / `INFO`** zeigt den Startblock noch einmal (mit
   den aktuellen Werten). Startblock auf **80 Spalten** umbrochen; „Radio values as defined in
   conf-file“ mit einer Zeile je Wert, die Herkunft steht nur noch, wenn sie nicht der

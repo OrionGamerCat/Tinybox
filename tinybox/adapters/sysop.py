@@ -106,6 +106,18 @@ class SysopConsole:
         commands.cmd_help(self.session, "")
         self.out(*texts.HELP_CONSOLE)
 
+    def cmd_info(self, arg: str) -> None:
+        """INFO: the start block again (version, calls, radio values, adapters, log,
+        config). Only INFO - I [call] stays the mailbox profile command."""
+        from prcore import termcolor
+        control = self.app.log_control
+        head, *items = logsetup.start_block(
+            self.app.cfg, VERSION, self.app.config_path,
+            control.path if control else None, control.debug if control else set())
+        tlog = logging.getLogger("tinybox")
+        tlog.info("%s", head.replace(" start -----", " info -----"), extra=termcolor.HEAD)
+        termcolor.kv_block(tlog, items)
+
     def cmd_bye(self, arg: str) -> None:
         self.out(texts.CONSOLE_NO_BYE)
 
@@ -402,6 +414,7 @@ class SysopConsole:
         "H": cmd_help, "?": cmd_help, "HELP": cmd_help,
         "B": cmd_bye, "BYE": cmd_bye,
         "W": cmd_who, "WHO": cmd_who,
+        "INFO": cmd_info,
         "MON": cmd_monitor,
         "LOG": cmd_log,
         "DISC": cmd_disc,

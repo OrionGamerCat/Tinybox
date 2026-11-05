@@ -1,0 +1,3 @@
+- Konsole im tbclient-Fenster: I / INFO zeigt den
+  Startblock noch einmal (mit Funkwerten),
+  H = Hilfe.

@@ -413,6 +413,18 @@ class LogCommandTests(unittest.TestCase):
         self.assertIn("agw", out)
         self.assertEqual(self.control.debug, set())
 
+    def test_info_shows_the_start_block_again(self):
+        self.app.config_path = "tinybox.conf"
+        with self.assertLogs("tinybox", "INFO") as cm:
+            self.run_cmd("INFO")
+        text = "\n".join(cm.output)
+        self.assertIn("info -----", text)
+        self.assertIn("Mailbox call", text)
+        self.assertIn("Config:", text)
+        # I stays the mailbox profile command, it does not give the start block
+        with self.assertNoLogs("tinybox", "INFO"):
+            self.run_cmd("I")
+
     def test_mark_is_written_into_the_log(self):
         out = self.run_cmd("LOG MARK CR32 nachstellen")
         self.assertIn("Mark written", out)

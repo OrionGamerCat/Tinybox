@@ -46,6 +46,7 @@ TinyBox läuft unter **Windows** und **Linux** (z. B. Debian, Ubuntu, Raspberry 
      python3 -m tbclient -c tbclient.conf    # der Client
      ```
    Die Web-GUI des Clients: http://127.0.0.1:7744/
+   Im Fenster des Clients zeigt `I` (oder `INFO`) den Startblock noch einmal, `H` die Hilfe.
 5. **Ohne Funk ausprobieren:** per Telnet auf `127.0.0.1`, Port `6300` – unter
    Windows mit PuTTY, unter Linux mit `telnet 127.0.0.1 6300` (siehe unten).
 
@@ -209,6 +210,7 @@ Im TinyBox-Fenster tippen. Es gelten alle Mailbox-Befehle mit Sysop-Rechten
 
 | Befehl | Funktion |
 |---|---|
+| `INFO` | Startblock noch einmal: Version, Rufzeichen, Funkwerte, Adapter, Log, Config (nur `INFO` – `I` bleibt der Profil-Befehl der Mailbox) |
 | `W` | Wer ist verbunden |
 | `MON [ON\|OFF]` | Laufende Sitzungen mitlesen (ohne Argument: umschalten) |
 | `DISC call` | Benutzer trennen (ohne SSID: alle SSIDs dieses Calls) |

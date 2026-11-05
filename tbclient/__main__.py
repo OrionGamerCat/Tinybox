@@ -11,6 +11,7 @@ import sys
 from prcore import release, termcolor
 
 from . import VERSION, config
+from .console import Console
 from .core import ClientCore
 from .web import WebServer
 
@@ -41,6 +42,11 @@ def main() -> int:
         core = ClientCore(cfg)
         await WebServer(core).start()
         web_line(log, cfg)
+        if sys.stdin is not None and sys.stdin.isatty():
+            def info() -> None:                 # console I: start block with all details
+                start_block(log, cfg, details=True, head="info")
+                web_line(log, cfg)
+            Console(info).start_stdin()
         tasks = []
         if cfg.update_check:                    # PLANUNG 24: hint only, never an install
             tasks.append(asyncio.create_task(release.watch(
@@ -61,9 +67,11 @@ def main() -> int:
     return 0
 
 
-def start_block(log: logging.Logger, cfg: config.Config) -> None:
-    """What the user wants to see at start: who am I, where to, over what."""
-    log.info("TinyBox client start - version %s (release %s)", VERSION, release.RELEASE,
+def start_block(log: logging.Logger, cfg: config.Config, details: bool = False,
+                head: str = "start") -> None:
+    """What the user wants to see at start: who am I, where to, over what.
+    details: the radio lines as INFO too (console I), else only with -v."""
+    log.info("TinyBox client %s - version %s (release %s)", head, VERSION, release.RELEASE,
              extra=termcolor.HEAD)
     termcolor.kv(log, "Your call", cfg.mycall)
     termcolor.kv(log, "Your locator", cfg.locator or "(not set)")
@@ -77,7 +85,7 @@ def start_block(log: logging.Logger, cfg: config.Config) -> None:
         if line.startswith("config hint: "):
             log.warning("%s", line)
         else:
-            log.debug("%s", line)
+            log.log(logging.INFO if details else logging.DEBUG, "%s", line)
 
 
 def web_line(log: logging.Logger, cfg: config.Config) -> None:
