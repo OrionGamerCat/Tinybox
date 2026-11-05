@@ -853,7 +853,8 @@ class StartBlockTests(unittest.TestCase):
     """The start block (and console I) fits into 80 columns."""
 
     def test_lines_fit_80_columns(self):
-        from kisshub.__main__ import PREFIX_WIDTH, start_items
+        from kisshub.__main__ import TAG, start_items
+        PREFIX_WIDTH = termcolor.prefix_width(TAG)
         for name in ("tnc7multi", "vara-fm", "pk232", "direwolf"):
             with self.subTest(name):
                 items = start_items("k.conf", example(name))
@@ -865,13 +866,13 @@ class StartBlockTests(unittest.TestCase):
                         self.assertLessEqual(PREFIX_WIDTH + len(line), 80, line)
 
     def test_wrap(self):
-        from kisshub.__main__ import wrap_items
-        items = wrap_items([("Label", "one two three four five six", "(a note)")], width=12)
+        wrap_items = termcolor.wrap_items
+        items = wrap_items("[x]", [("Label", "one two three four five six", "(a note)")], width=12)
         self.assertEqual(items, [("Label", "one two", ""), ("", "three four", ""),
                                  ("", "five six", ""), ("", "(a note)")])
-        self.assertEqual(wrap_items([("L", "short", "(n)")], width=20), [("L", "short", "(n)")])
+        self.assertEqual(wrap_items("[x]", [("L", "short", "(n)")], width=20), [("L", "short", "(n)")])
         link = ("Status query", "http://127.0.0.1:8102/status", "", True)
-        self.assertEqual(wrap_items([link, None, "plain"], width=5), [link, None, "plain"])
+        self.assertEqual(wrap_items("[x]", [link, None, "plain"], width=5), [link, None, "plain"])
         self.assertEqual(termcolor.kv_plain("", "x"), " " * termcolor.LABEL_WIDTH + " x")
 
 

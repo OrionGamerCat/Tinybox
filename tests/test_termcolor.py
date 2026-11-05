@@ -55,3 +55,21 @@ class TermcolorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WrapTests(unittest.TestCase):
+    """Start blocks of TinyBox, client and kisshub: 80 columns."""
+
+    def test_wrap_items_and_line(self):
+        from prcore import termcolor as tc
+        self.assertEqual(tc.value_width("[tinyb]"), 80 - 17 - tc.LABEL_WIDTH - 1)
+        items = tc.wrap_items("[tinyb]", [("Adapters", "a=on " * 12), None,
+                                          ("Data", "C:\\a\\very\\long\\path\\" * 3)])
+        for x in items:
+            if x and x[0] != "Data":
+                self.assertLessEqual(17 + len(tc.kv_plain(*x)), 80)
+        self.assertEqual(items[-1][1], "C:\\a\\very\\long\\path\\" * 3)     # not broken
+        lines = tc.wrap_line("word " * 30, 40)
+        self.assertTrue(all(len(x) <= 40 for x in lines))
+        self.assertTrue(lines[1].startswith("  "))
+        self.assertEqual(tc.wrap_line("short", 40), ["short"])

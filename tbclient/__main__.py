@@ -73,25 +73,29 @@ def start_block(log: logging.Logger, cfg: config.Config, details: bool = False,
     details: the radio lines as INFO too (console I), else only with -v."""
     log.info("TinyBox client %s - version %s (release %s)", head, VERSION, release.RELEASE,
              extra=termcolor.HEAD)
-    termcolor.kv(log, "Your call", cfg.mycall)
-    termcolor.kv(log, "Your locator", cfg.locator or "(not set)")
-    termcolor.blank(log)
-    termcolor.kv(log, "Your preferred TinyBox", cfg.tinybox_call)
-    termcolor.kv(log, "Autoconnect to", cfg.tinybox_call if cfg.auto_connect else "off")
-    termcolor.blank(log)
-    termcolor.kv(log, "Connection via", cfg.link, config.link_note(cfg))
-    termcolor.blank(log)
+    termcolor.kv_block(log, termcolor.wrap_items(TAG, [
+        ("Your call", cfg.mycall),
+        ("Your locator", cfg.locator or "(not set)"),
+        None,
+        ("Your preferred TinyBox", cfg.tinybox_call),
+        ("Autoconnect to", cfg.tinybox_call if cfg.auto_connect else "off"),
+        None,
+        ("Connection via", cfg.link, config.link_note(cfg)),
+        None]))
+    width = termcolor.LINE_WIDTH - termcolor.prefix_width(TAG)
     for line in config.radio_lines(cfg):     # details only with -v, hints always
-        if line.startswith("config hint: "):
-            log.warning("%s", line)
-        else:
-            log.log(logging.INFO if details else logging.DEBUG, "%s", line)
+        hint = line.startswith("config hint: ")
+        level = logging.WARNING if hint else logging.INFO if details else logging.DEBUG
+        # a warning line carries "[WARN] " in front of the message
+        for part in termcolor.wrap_line(line, width - (7 if hint else 0)):
+            log.log(level, "%s", part)
 
 
 def web_line(log: logging.Logger, cfg: config.Config) -> None:
     if cfg.web_host in ("0.0.0.0", "::"):
         termcolor.kv(log, "Web GUI on HTTP", f"http://{socket.gethostname()}:{cfg.web_port}/",
-                     f"(on this PC: http://127.0.0.1:{cfg.web_port}/)", url=True)
+                     url=True)
+        termcolor.kv(log, "", f"(on this PC: http://127.0.0.1:{cfg.web_port}/)")
     else:
         termcolor.kv(log, "Web GUI on HTTP", f"http://{cfg.web_host}:{cfg.web_port}/", url=True)
 

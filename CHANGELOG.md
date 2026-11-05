@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+- **Startblock auf 80 Spalten** auch bei TinyBox und Client (2026.11.05.2): lange Werte und
+  Anmerkungen gehen unter dem Wert weiter, Pfade und Links werden nicht getrennt. Gemeinsam
+  in `prcore/termcolor.py` (`wrap_items`), der kisshub nutzt dieselbe Funktion.
 - **INFO in den Konsolen:** TinyBox-Sysop-Konsole `INFO` (nur so – `I` bleibt der
   Profil-Befehl der Mailbox) und neue Konsole im tbclient-Fenster mit `I` / `INFO` und
   `H` (Client 2026.11.05): der Startblock noch einmal, beim Client mit den Funkwerten, die

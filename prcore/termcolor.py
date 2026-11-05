@@ -98,6 +98,68 @@ def kv_plain(label: str, value, note: str = "") -> str:
     return text + f"  {note}" if note else text
 
 
+LINE_WIDTH = 80                       # console lines: "[tag] HH:MM:SS " + label + value
+
+
+def prefix_width(tag: str) -> int:
+    """'[kisshb] 16:11:48 ' - tag, time and the blanks in front of the message."""
+    return len(tag) + 10
+
+
+def value_width(tag: str) -> int:
+    return LINE_WIDTH - prefix_width(tag) - LABEL_WIDTH - 1
+
+
+def wrap_items(tag: str, items: list, width: int | None = None) -> list:
+    """Start block items (kv_block) broken to 80 columns: a long value goes on under
+    itself (continuation lines with an empty label), a note that does not fit behind
+    the last value line gets lines of its own under the value. A plain string line
+    goes on indented by two. Links and single long words (paths) are never broken."""
+    width = width or value_width(tag)
+    plain = LINE_WIDTH - prefix_width(tag)
+    out: list = []
+    for item in items:
+        if item is None:
+            out.append(item)
+        elif isinstance(item, str):
+            out.extend(wrap_line(item, plain))
+        elif len(item) > 3 and item[3]:
+            out.append(item)                          # a link stays in one piece
+        else:
+            label, value = item[0], str(item[1])
+            note = item[2] if len(item) > 2 else ""
+            # a label longer than the label column pushes its value to the right
+            first = width - max(0, len(label) + 1 - LABEL_WIDTH)
+            lines = _wrap(value, first, width)
+            room = (first if len(lines) == 1 else width) - len(lines[-1])
+            tail = note if note and (not lines[-1] or len(note) + 2 <= room) else ""
+            for n, text in enumerate(lines):
+                out.append((label if n == 0 else "", text,
+                            tail if n == len(lines) - 1 else ""))
+            if note and not tail:
+                out.extend(("", text) for text in _wrap(note, width, width))
+    return out
+
+
+def wrap_line(text: str, width: int) -> list[str]:
+    """A plain line into lines of `width`, the continuation lines indented by two."""
+    if len(text) <= width:
+        return [text]
+    return ["  " + x if n else x for n, x in enumerate(_wrap(text, width, width - 2))]
+
+
+def _wrap(text: str, first: int, width: int) -> list[str]:
+    """Words of text into lines: the first one `first` long, the others `width`."""
+    import textwrap
+    if not text:
+        return [""]
+    opts = dict(break_on_hyphens=False, break_long_words=False)
+    lines = textwrap.wrap(text, max(first, 10), **opts)
+    if len(lines) > 1 and first != width:
+        lines = lines[:1] + textwrap.wrap(" ".join(lines[1:]), max(width, 10), **opts)
+    return lines
+
+
 def kv(log: logging.Logger, label: str, value, note: str = "", url: bool = False,
        level: int = logging.INFO) -> None:
     """A label/value line of a start block:  'Your call:              OE3XXX'."""

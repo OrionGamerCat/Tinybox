@@ -13,7 +13,6 @@ import argparse
 import asyncio
 import dataclasses
 import logging
-import textwrap
 import sys
 from pathlib import Path
 
@@ -120,48 +119,6 @@ def log_lines(config_path: str, cfg) -> list[tuple]:
     return lines
 
 
-# console line: "[kisshb] 16:11:48 " + label (LABEL_WIDTH + 1) + value - 80 columns
-LINE_WIDTH = 80
-PREFIX_WIDTH = len(TAG) + 10
-VALUE_WIDTH = LINE_WIDTH - PREFIX_WIDTH - termcolor.LABEL_WIDTH - 1
-
-
-def wrap_items(items: list, width: int = VALUE_WIDTH) -> list:
-    """Start block items broken to 80 columns: a long value goes on under itself
-    (continuation lines with an empty label), a note that does not fit behind the
-    last value line gets lines of its own under the value. Links are never broken."""
-    out: list = []
-    for item in items:
-        if item is None or isinstance(item, str) or (len(item) > 3 and item[3]):
-            out.append(item)                          # empty line, plain line, link
-            continue
-        label, value = item[0], str(item[1])
-        note = item[2] if len(item) > 2 else ""
-        # a label longer than the label column pushes its value to the right
-        first = width - max(0, len(label) + 1 - termcolor.LABEL_WIDTH)
-        lines = _wrap(value, first, width)
-        room = (first if len(lines) == 1 else width) - len(lines[-1])
-        tail = note if note and (not lines[-1] or len(note) + 2 <= room) else ""
-        for n, text in enumerate(lines):
-            last = n == len(lines) - 1
-            out.append((label if n == 0 else "", text, tail if last else ""))
-        if note and not tail:
-            out.extend(("", text) for text in _wrap(note, width, width))
-    return out
-
-
-def _wrap(text: str, first: int, width: int) -> list[str]:
-    """Words of text into lines: the first one `first` long, the others `width`."""
-    if not text:
-        return [""]
-    lines = textwrap.wrap(text, max(first, 10), break_on_hyphens=False,
-                          break_long_words=False)
-    if len(lines) > 1 and first != width:
-        lines = lines[:1] + textwrap.wrap(" ".join(lines[1:]), width,
-                                          break_on_hyphens=False, break_long_words=False)
-    return lines
-
-
 def start_items(config_path: str, cfg) -> list:
     """The start block (termcolor.kv_block): what runs, where, with which values -
     at start and with the console command I."""
@@ -173,7 +130,7 @@ def start_items(config_path: str, cfg) -> list:
     else:
         status = ("Status query", "off",
                   "([server] status_port = 0 - TinyBox and client keep their own values)")
-    return wrap_items([("TNC profile", p.name, f"({p.notes})"),
+    return termcolor.wrap_items(TAG, [("TNC profile", p.name, f"({p.notes})"),
                        ("TNC port", make_transport(cfg.tnc).describe()),
                        ("KISS-TCP for programs", f"{h.listen}:{h.port}"),
                        status,

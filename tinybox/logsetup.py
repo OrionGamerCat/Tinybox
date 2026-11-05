@@ -508,8 +508,13 @@ def start_block(cfg, version: str, config_path: str | None,
     else:
         via = ("agw", f"(Direwolf {cfg.direwolf.agw_host}:{cfg.direwolf.agw_port}, "
                       f"port {cfg.direwolf.agw_radio_port})")
+    return [f"----- TinyBox {version} ({git_commit(root)}) start -----",
+            *termcolor.wrap_items("[tinyb]", _start_items(cfg, adapters, via, config_path,
+                                                          log_path, debug))]
+
+
+def _start_items(cfg, adapters: str, via: tuple, config_path, log_path, debug) -> list:
     return [
-        f"----- TinyBox {version} ({git_commit(root)}) start -----",
         ("Mailbox call", cfg.station.mailbox_call),
         ("BBS call", cfg.station.bbs_call),
         ("Sysop", cfg.station.sysop_call),
