@@ -209,6 +209,11 @@ Station
   Verlauf und Kanalauslastung - dazu die "Suenden" (zu haeufige Baken,
   unveraenderte Wiederholungen, lange Pfade, falsche Uhren, kaputte Pakete,
   viel Internet-Verkehr auf Funk). Gespeichert bis 7 Tage.
+- Netzgraph in der APRS-Statistik: wer dich ueber wen erreicht - Stationen,
+  Digipeater, iGates und du als Bubbles, Wege als Pfeile (Staerke = Frames).
+  Drei Ansichten: Hop-Radar (Ring = Hops, Winkel = Richtung), Karte (echte
+  Richtung, Entfernung), Kraft. Filter nach Paketart und min. Frames je Link;
+  Geraete-Torte (Frames oder Stationen), ein Klick filtert den Graphen.
 - Stationsseite je Rufzeichen (Klick auf ein Rufzeichen im Monitor oder in
   der Statistik): Rolle, Geraet, Entfernung, Art der Frames, Frames/h,
   Aktivitaet nach Wochentag/Stunde, Bakenabstaende, Wege zu dir, Leistung als

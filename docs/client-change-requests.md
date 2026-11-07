@@ -1,7 +1,7 @@
 # TinyBox-Client – Change Requests
 
 Gesammelt beim ersten Test PC1 ↔ PC2 (OE3GAS, OE3TEC) am 09.10.2026, ergänzt laufend.
-Stand: 24.10.2026 (CR73 umgesetzt)
+Stand: 07.11.2026 (CR79 Stufe 1 umgesetzt)
 
 ## Übersicht
 
@@ -59,6 +59,7 @@ Stand: 24.10.2026 (CR73 umgesetzt)
 | 50 | Monitor: alter Monitor aus den Settings raus, ohne „fm“, Rufzeichen farbig, Filter nach Text und nach TinyBox-Sonderframes, Clear | ✅ siehe unten |
 | 53 | TinyBox-Web-GUI: Monitor auf schwarzem Hintergrund (wie im Client) | ✅ siehe unten |
 | 73 | Benutzerprofil: Name, Locator, Home-BBS in TinyBox und Client (Terminal-Fragen, Formular im Client, `//PROF`, `//WHOIS`) | ✅ siehe unten (Funktest offen) |
+| 79 | APRS-Statistik: Netzgraph (Bubbles, Knoten, Wege) mit Filter nach Paketart, Geräte-Torte | ✅ Stufe 1 siehe unten (Stufe 2 offen) |
 
 ## CR2 – Emojis (erledigt 11.10.2026)
 
@@ -2305,4 +2306,50 @@ freischalten.
 `[tinybox] max_channels` (Standard 5, erlaubt 1 … 10) ersetzt die feste Grenze 5 aus CR45.
 Eingehende Connects und der Kanal des Mail-Abgleichs zählen mit. Alt+1 … Alt+9 schalten um,
 Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
+
+## CR79 – APRS-Statistik: Netzgraph und Geräte-Torte (✅ Stufe 1, 07.11.2026)
+
+### Erfassung (OE3GAS, 07.11.2026)
+
+- Eine anschauliche Grafik zur APRS-Statistik mit Bubbles, Knoten und Verbindungsvektoren:
+  wer erreicht mich über wen.
+- Filter nach Art der Pakete: alle, Position, Telemetrie usw.
+- Auswertung der verwendeten Geräte als Tortendiagramm.
+- Entwurf: Visualisierung im Chat (claude.ai), Varianten Kraft / Hop-Radar / Karte.
+
+### Umsetzung Stufe 1 (Client 2026.11.07.8)
+
+- **Daten:** `AprsStats.graph(window, me=…)` in `prcore/aprsstats.py`, API
+  `GET /api/aprs/graph?win=<s>`. Knoten: Stationen, Digipeater, iGates und die eigene Station
+  (`kind` = `station` / `digi` / `igate` / `me`), mit letzter bekannter Position (auch außerhalb des
+  Zeitfensters, damit Digis mit eigener Bake einen Ort haben), Gerät und `moving` (Positionen
+  > 1 km auseinander). Wege: Absender [→ iGate] → Digi … → ich, zusammengezählt je Weg,
+  Pakettyp, Gerät und Internet-Herkunft – so filtert die GUI selbst. Höchstens die 80
+  aktivsten Absender (`GRAPH_MAX_STATIONS`). Test: `test_graph`.
+- **Anzeige** (`tbclient/web/aprsgraph.js`, reines SVG ohne Bibliothek – der Client läuft auch
+  ohne Internet): Karte „Network“ in der APRS-Statistik nach „Frames over time“.
+  - Bubbles: eigene Box grau, Digi orange, iGate grün, Station blau; mobile Stationen mit
+    gestricheltem Ring, geschätzte Position (Digi ohne Bake: Mitte der Nachbarn) gepunktet.
+    Größe = Frames durch den Knoten, Linienstärke = Frames je Link, Pfeil zur eigenen Station,
+    Internet → Funk grün gestrichelt.
+  - **Hop-Radar** (Standard): Ring = Hops (direkt gehört, 1 Hop, 2 Hops …), Winkel = Richtung vom
+    eigenen Locator, Nachbarn je nach Größe auseinandergeschoben.
+  - **Karte:** echte Richtung, Entfernung auf Wurzel-Skala (nahe Stationen bleiben getrennt),
+    Ringe in km; nur mit Locator in `tbclient.conf`.
+  - **Kraft:** nur die Struktur, Cluster um die Digis. Wechsel der Ansichten gleitend; die
+    gewählte Ansicht bleibt im Browser gemerkt.
+  - **Filter:** Paketart (Alle + die im Fenster vorkommenden Typen), „min. frames per link“.
+    Die Knoten bleiben beim Filtern an ihrem Platz.
+  - Überfahren: die Wege dieser Station hervorgehoben, Zeile darunter mit Frames, Entfernung,
+    Hops, Gerät. Klick: Stationsseite (CR65).
+  - **Geräte-Torte:** Anteile nach Frames oder Stationen, folgt dem Paketart-Filter; sieben
+    Farben, der Rest als „Other“. Klick auf ein Stück oder eine Zeile filtert den Graphen auf die
+    Stationen mit diesem Gerät (Chip „Device: … ×“ hebt es auf).
+
+### Stufe 2 (offen, Ideen OE3GAS/Claude)
+
+- **Zeitachse:** Regler über das Zeitfenster, Kanten blenden auf und ab – man sieht, wann ein
+  Digi ausfällt oder ein Mobiler durchs Netz wandert.
+- **Kanten nach Hop-Typ:** kräftig für einen Hop über WIDE1, blass für WIDE2-2-Fluten.
+- **Kanal-Health:** roter Rand an Digis, über die viele „unchanged repeats“ laufen (Sins).
 

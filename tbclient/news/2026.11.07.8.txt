@@ -1,0 +1,2 @@
+- APRS-Statistik: Netzgraph (Hop-Radar, Karte, Kraft),
+  Filter nach Paketart, Geraete-Torte (Klick filtert).

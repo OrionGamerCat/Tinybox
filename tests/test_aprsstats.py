@@ -97,6 +97,26 @@ class StatsTests(unittest.TestCase):
             n = sqlite3.connect(str(p)).execute("SELECT count(*) FROM rec").fetchone()[0]
             self.assertEqual(n, 1)
 
+    def test_graph(self):                        # CR79: the network graph
+        for i in range(3):
+            feed(self.st, T0 + 60 * i, "OE1IAH-8", ["OE6XTR", "OE3XWJ-10", "WIDE2"], [1, 1, 1],
+                 b"!4807.19N/01656.63Ev209/000/A=000891Arnold car 578", dest="APDR10")
+        feed(self.st, T0 + 10, "OM0ODX", ["OE3XWJ-10", "WIDE2"], [1, 1],
+             b"}OM5KV-15>APNL51,TCPIP,OM0ODX*:!4746.48N/01805.55E`Radiosonde")
+        feed(self.st, T0 + 20, "OE3XKN-10", ["WIDE1", "WIDE3-3"], [0, 0], b"!/6,fxRISM} st", dest="APOT2A")
+        g = self.st.graph(0, now=T0 + 400, me="OE3GAS-10")
+        kinds = {n["call"]: n["kind"] for n in g["nodes"]}
+        self.assertEqual(kinds["OE3GAS-10"], "me")
+        self.assertEqual(kinds["OE3XWJ-10"], "digi")
+        self.assertEqual(kinds["OM0ODX"], "igate")
+        self.assertEqual(kinds["OM5KV-15"], "station")
+        ways = {tuple(w["chain"]): w for w in g["ways"]}
+        self.assertEqual(ways[("OE1IAH-8", "OE6XTR", "OE3XWJ-10", "OE3GAS-10")]["n"], 3)
+        self.assertTrue(ways[("OM5KV-15", "OM0ODX", "OE3XWJ-10", "OE3GAS-10")]["inet"])
+        self.assertIn(("OE3XKN-10", "OE3GAS-10"), ways)              # heard directly
+        me = next(n for n in g["nodes"] if n["call"] == "OE3GAS-10")
+        self.assertIsNotNone(me["lat"])                               # our locator
+
     def test_country(self):
         self.assertEqual(country("OE3GAS-1"), "Austria")
         self.assertEqual(country("OK1KZE-1"), "Czechia")

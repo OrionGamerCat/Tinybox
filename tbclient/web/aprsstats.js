@@ -1,6 +1,6 @@
 // APRS statistics of the channel (CR61) - the page "APRS statistics" in the client.
 // The numbers come from GET /api/aprs/stats?win=<seconds> (prcore/aprsstats.py);
-// this file only draws them. CR65: a click on a call opens the station page of
+// this file only draws them (the network graph: aprsgraph.js, CR79). CR65: a click on a call opens the station page of
 // that call (GET /api/aprs/station?call=..&win=..); Back goes the way back.
 "use strict";
 
@@ -9,6 +9,7 @@ const AprsStatsView = (() => {
   let win = 3600;
   let timer = null;
   let data = null;
+  let graph = null;                        // CR79: /api/aprs/graph of the same window
   let armed = false;                       // Reset needs a second click
   const sorts = {};                        // table id -> [column, descending]
   let onCall = () => {};                   // show a call / device in the monitor (filter)
@@ -161,6 +162,9 @@ const AprsStatsView = (() => {
     tlfoot.append(mk("span", "", hhmm(tl.first)), mk("span", "", `one bar = ${tl.slot >= 3600 ? tl.slot / 3600 + " h" : tl.slot / 60 + " min"}`),
                   mk("span", "", hhmm(d.now)));
     body.append(card("Frames over time", "", tlb, tlfoot));
+    if (graph && typeof AprsGraph !== "undefined") {   // CR79: network graph and device pie
+      body.append(AprsGraph.card(graph, { cats: CAT, onStation: (c) => openStation(c, true) }));
+    }
 
     const grid = mk("div", "st-grid");
     // CR63 order: Heard, iGates, Packet types, then the rest; Sins at the very end
@@ -224,9 +228,14 @@ const AprsStatsView = (() => {
     const url = p.kind === "station" ? `/api/aprs/station?call=${encodeURIComponent(p.call)}&win=${win}`
       : `/api/aprs/stats?win=${win}`;
     try {
+      const gr = p.kind === "overview" ? fetch(`/api/aprs/graph?win=${win}`, { cache: "no-store" }) : null;
       const r = await fetch(url, { cache: "no-store" });
       if (!r.ok || page() !== p) return;
       data = await r.json();
+      if (gr) {
+        try { const g = await gr; graph = g.ok ? await g.json() : null; } catch (e) { graph = null; }
+        if (page() !== p) return;
+      }
       if (p.kind === "station") drawStation(); else draw();
     } catch (e) { /* next time */ }
   }

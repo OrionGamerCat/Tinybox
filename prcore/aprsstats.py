@@ -40,6 +40,7 @@ log = logging.getLogger(__name__)
 KEEP_SEC = 7 * 86400          # records older than this are dropped
 MAX_RECORDS = 200_000
 PRUNE_SEC = 3600              # CR64: tidy the file this often while running
+GRAPH_MAX_STATIONS = 80       # CR79: the network graph shows the busiest senders only
 BAUD = 1200
 TXDELAY_SEC = 0.3             # assumed key-up time per frame (air time estimate)
 
@@ -328,6 +329,60 @@ class AprsStats:
             "timeline": {"slot": slot, "first": first, "counts": tl},
             "sins": self._sins(recs, n, span),
         }
+
+    # --- the network graph (CR79) -------------------------------------------------------
+    def graph(self, window: int = 0, now: float | None = None, me: str = "") -> dict:
+        """Who reaches us over whom: nodes (stations, digipeaters, iGates, us) and the ways.
+
+        A way is sender [-> iGate] -> digipeater ... -> me; equal ways with the same packet
+        type and device are summed, so the GUI can filter by type and device itself."""
+        now = time.time() if now is None else now
+        me = (me or "ME").upper()
+        start = max(self.since, now - window) if window else self.since
+        recs = [r for r in self.recs if r["t"] >= start]
+        busiest = {c for c, _ in Counter(r["origin"] for r in recs).most_common(GRAPH_MAX_STATIONS)}
+        pos: dict[str, tuple] = {}
+        for r in self.recs:                          # last known position, also outside the window
+            if r["lat"] is not None:
+                pos[r["origin"]] = (r["lat"], r["lon"])
+        ways: Counter = Counter()
+        digis, gates, own = set(), set(), Counter()
+        dev: dict[str, str] = {}
+        spots: dict[str, list] = defaultdict(list)
+        for r in recs:
+            if r["origin"] not in busiest:
+                continue
+            chain = [r["origin"]]
+            if r["gate"] and r["gate"] != r["origin"]:
+                chain.append(r["gate"])
+                gates.add(r["gate"])
+            for d in r["digis"]:
+                if d != chain[-1]:
+                    chain.append(d)
+                    digis.add(d)
+            if chain[-1] != me:
+                chain.append(me)
+            if len(chain) < 2:
+                continue                             # our own frame, heard directly
+            ways[(tuple(chain), r["cat"], r["dev"] or "(unknown)", bool(r["gate"]))] += 1
+            own[r["origin"]] += 1
+            if r["dev"]:
+                dev[r["origin"]] = r["dev"]
+            if r["lat"] is not None:
+                spots[r["origin"]].append((r["lat"], r["lon"]))
+        calls = {c for (ch, *_rest) in ways for c in ch}
+        nodes = []
+        for c in sorted(calls):
+            kind = "me" if c == me else "igate" if c in gates else "digi" if c in digis else "station"
+            pts = spots.get(c, [])
+            moving = len(pts) >= 2 and max(_dist(pts[0], p) for p in pts) > 1.0
+            p = self.home if c == me else pos.get(c)
+            nodes.append({"call": c, "kind": kind, "frames": own.get(c, 0), "dev": dev.get(c, ""),
+                          "moving": moving, "lat": p[0] if p else None, "lon": p[1] if p else None})
+        return {"window": window, "since": start, "now": now, "me": me, "have_home": bool(self.home),
+                "nodes": nodes,
+                "ways": [{"chain": list(ch), "cat": cat, "dev": d, "inet": inet, "n": k}
+                         for (ch, cat, d, inet), k in ways.most_common()]}
 
     # --- one station (CR65) -----------------------------------------------------------
     def station(self, call: str, window: int = 0, now: float | None = None) -> dict:
