@@ -117,6 +117,14 @@ class SysopConsole:
         tlog = logging.getLogger("tinybox")
         tlog.info("%s", head.replace(" start -----", " info -----"), extra=termcolor.HEAD)
         termcolor.kv_block(tlog, items)
+        # as at the start: the address, then the login link (secret token: console only,
+        # never the log file)
+        url = self.app.web_login_url
+        if url:
+            termcolor.kv(tlog, "Web GUI", url.split("/login?", 1)[0] + "/", url=True)
+            termcolor.kv_print("[tinyb]", "Web GUI login", url, self.app.cfg.console.color, url=True)
+        else:
+            termcolor.kv(tlog, "Web GUI", "off ([web] enabled = no)")
 
     def cmd_bye(self, arg: str) -> None:
         self.out(texts.CONSOLE_NO_BYE)

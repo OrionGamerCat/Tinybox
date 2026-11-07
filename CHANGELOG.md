@@ -2,6 +2,8 @@
 
 ## Unveröffentlicht
 
+- TinyBox-Konsole: `INFO` zeigt am Ende wieder **Web GUI** und **Web GUI login** wie beim Start
+  (der Login-Link nur in der Konsole, nie im Logfile).
 - **Startblock auf 80 Spalten** auch bei TinyBox und Client (2026.11.05.2): lange Werte und
   Anmerkungen gehen unter dem Wert weiter, Pfade und Links werden nicht getrennt. Gemeinsam
   in `prcore/termcolor.py` (`wrap_items`), der kisshub nutzt dieselbe Funktion.
