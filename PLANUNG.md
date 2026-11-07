@@ -11,7 +11,7 @@ Stand: 07.10.2026 (Rev. 4) · OE3GAS
 
 | Teil | Zweck | Stand | Details |
 |---|---|---|---|
-| Forwarding (F0–F7) | TinyBox tauscht Post und Bulletins mit anderen Mailboxen (LinBPQ, FBB, openBCM) | F1–F5 fertig: TinyBox empfängt und sendet (ASCII, FBB, B1 komprimiert), ruft Partner selbst an; mit LinBPQ getestet. Als Nächstes F6 (Anschluss ans Netz) | Abschnitt 13 und Konzept-Doc |
+| Forwarding (F0–F7) | TinyBox tauscht Post und Bulletins mit anderen Mailboxen (LinBPQ, FBB, openBCM) | F1–F5 fertig: TinyBox empfängt und sendet (ASCII, FBB, B1 komprimiert), ruft Partner selbst an; mit LinBPQ (TCP) und TinyBox ↔ TinyBox über Funk getestet. Als Nächstes F6 (Anschluss ans Netz) | Abschnitt 13 und Konzept-Doc |
 | TinyBox-Client (C0–C3) | Eigener Client mit Funktionen, die es nur mit der TinyBox gibt: Post-Hinweis, Chat per UI-Broadcast, Offline-Mailbox | C0–C3 umgesetzt: Grundgerüst, Handshake, Post-Hinweis, Chat mit UI-Broadcast, Web-GUI im Messenger-Stil (Handy und PC, 08.10.2026); Offline-Mailbox mit Abgleich (10.10.2026). Funktest von C3 offen | Abschnitt 12 |
 
 **Änderungen gegenüber Rev. 3**
@@ -480,7 +480,7 @@ Sitzungszustände: `COMMAND` → `SEND_SUBJECT` → `SEND_BODY` → `COMMAND`. W
 | P1 ✅ | **Major Fix** brocastd: kein Datenbank-Schreiben pro Funk-Frame, Sendeprotokoll abschaltbar (offener Punkt 9) | Umgesetzt 28.10.2026 (Abschnitt 26), Voraussetzung für Dauerbetrieb auf dem NanoPi (eMMC) |
 | M5 | MQTT-Adapter (Ein-/Ausgang) | Anbindung an Broker |
 | M6 (opt.) | Beacon (UI-Frame) | Mailbox kündigt sich an |
-| F0–F7 | Forwarding-Modul (Abschnitt 13) | F1–F5 fertig (06.–08.10.2026), mit LinBPQ getestet; F0 teilweise. Als Nächstes F6 |
+| F0–F7 | Forwarding-Modul (Abschnitt 13) | F1–F5 fertig (06.–08.10.2026), mit LinBPQ getestet, über Funk TinyBox ↔ TinyBox 07.11.2026; F0 teilweise. Als Nächstes F6 |
 | C0–C3 | TinyBox-Client (Abschnitt 12) | Grundgerüst, Post-Hinweis, Chat-Broadcast (08.10.2026), Offline-Mailbox (10.10.2026). Funktest C3 offen |
 | K1–K10 | KISS-Mode: eigener AX.25-Automat (v2.2) + `kisshub` (Abschnitt 15) | K1–K5 ✅, K7 ✅; Funktest PK-232 erfolgreich (14.10.2026, Gerät A, FW 13.SEP.95). K6, K8–K10 ruhen (15.10.2026): Tests und Zugriff auf weitere TNCs stehen aus |
 
@@ -941,7 +941,18 @@ Ausführliches Konzept mit Protokollen, Routing, Testfällen und Quellen: Claude
 - ASCII nach W0RLI funktioniert in beide Richtungen (TinyBox sendet, TinyBox holt mit `F>` ab).
 - LinBPQ sendet `F` in der SID nur mit „Allow Binary“ und überträgt dann **immer komprimiert**, auch wenn die Gegenseite kein `B` ankündigt. Unkomprimiertes FBB gibt es mit LinBPQ also nicht: Partner-Einstellung `protocol = b1` oder `ascii`.
 - Eine Nachricht mit kaputter @-Adresse wird jetzt angenommen und gehalten statt abgelehnt (ein `-` hieße für den Absender „schon da“).
-- **B1 (nach F5):** TinyBox ↔ LinBPQ komprimiert in beide Richtungen, sowohl wenn TinyBox anruft (FBBPORT 8011) als auch wenn LinBPQ anruft (Login am Forward-Port 6411). Titel und Text mit Umlauten kommen unverändert an. Damit sind die Tore von F3 und F4 über TCP erreicht; Funk (AGW zwischen PC1 und PC2) steht noch aus.
+- **B1 (nach F5):** TinyBox ↔ LinBPQ komprimiert in beide Richtungen, sowohl wenn TinyBox anruft (FBBPORT 8011) als auch wenn LinBPQ anruft (Login am Forward-Port 6411). Titel und Text mit Umlauten kommen unverändert an. Damit sind die Tore von F3 und F4 über TCP erreicht; über Funk siehe den Funktest vom 07.11.2026.
+
+**Funktest TinyBox ↔ TinyBox (07.11.2026)** – PC1 (OE3XHU, `OE3XHU.#NOE.AUT.EU`, Direwolf + TS-790) und die Box auf der Hinteralm (OE3GAS-1, `OE3GAS.#NOE.AUT.EU`, Direwolf + IC-9700), 2 m, 1200 Bd, AGW, `protocol = b1`, beide Seiten `auto = no` (Sitzungen von Hand mit `FWD`)
+
+- ✅ A: persönliche Nachricht PC1 → Hinteralm (Sitzung ca. 7 s, Verbindungsaufbau 1,5–2,5 s)
+- ✅ B: Nachricht Hinteralm → PC1, Reverse Forward in der Sitzung von PC1
+- ✅ C: Bulletin `@WW`; ✅ D: zweiter Durchgang bietet nichts an, nichts geht zurück (Split Horizon)
+- ✅ E: Umlaute und große Nachricht (ca. 3 kB) unverändert
+- ✅ G: Hinteralm ruft PC1 an (`25_OE3GAS` empfangen, 18 s)
+- Offen: F – Abbruch mitten in einer B1-Übertragung und Fortsetzen (`!offset`) über Funk
+- Beobachtung: PC1 lief vorher als OE3GAS-1 und kennt deshalb die BIDs `1_OE3GAS`–`24_OE3GAS` aus der eigenen Zeit. Angebote der Hinteralm mit diesen BIDs wurden korrekt als bekannt abgelehnt; die Hinteralm markiert sie dann als weitergeleitet (`F`), sie kommen also nie an. Kein Fehler, aber Merkposten: Wer das Mailbox-Rufzeichen wechselt, behält die alten BIDs bis `bid_days`.
+- Dabei behoben: Web-GUI „New message“ nimmt `@ Adresse` und `$BID`; Lesen zeigt „To“ mit @-Adresse.
 
 **F5 im Detail (08.10.2026)**
 
