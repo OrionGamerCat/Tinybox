@@ -612,11 +612,20 @@ class FreeConnectTests(unittest.TestCase):
                                         for c in a.channels.values()))
                 ca = a.channels[1]
                 self.assertEqual((ca.target, ca.mode), ("OE3TEC", "terminal"))
+                self.assertEqual(a.snapshot()["focus"], {"n": 1, "seq": 1})   # CR75
                 self.assertTrue(b.send_raw("Servus", ch=1))
                 await until(lambda: any(x == "Servus" for _, k, x in ca.term if k == "rx"))
                 b.disconnect(1)
                 await until(lambda: ca.state == "offline")
                 self.assertEqual(ca.ended["kind"], "remote")
+                # CR75: a TinyBox connecting to us - no jump to its terminal
+                a.settings["tinyboxes"] = ["OE3TEC"]
+                self.assertTrue(await b.connect("OE3GAS", ch=1))
+                await until(lambda: any(c.incoming and c.state == "online"
+                                        for c in a.channels.values()))
+                self.assertEqual(a.focus["seq"], 1)
+                b.disconnect(1)
+                await until(lambda: all(c.state == "offline" for c in a.channels.values()))
                 for t in tasks:
                     t.cancel()
             dw.server.close()

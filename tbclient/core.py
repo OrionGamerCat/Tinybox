@@ -121,6 +121,8 @@ class ClientCore:
         self.heard_at: dict[str, float] = {}      # call -> last frame heard (any kind)
         self.mail: dict | None = None             # {"count": n, "at": unix} - C1 notice
         self.sysmsg: dict | None = None           # system message (shutdown) from the TinyBox
+        # CR75: a station connected to us - the GUI switches to its terminal
+        self.focus = {"n": 0, "seq": 0}
         self.direct_at: dict[str, float] = {}     # call -> last frame heard directly
         self.channel_busy_at = 0.0                # last frame not between us and the TinyBox
         self.unwrap = proto.Unwrapper()
@@ -289,6 +291,12 @@ class ClientCore:
         ch.incoming, ch.view, ch.auto, ch._user_disc = True, "term", False, False
         self.console.append(f"[{n}] *** {remote} connected to us")
         return ch.link
+
+    def focus_channel(self, n: int) -> None:
+        """CR75: the GUI shows channel n (its terminal) at once - for an incoming
+        connect of a station that is no TinyBox."""
+        self.focus = {"n": n, "seq": self.focus["seq"] + 1}
+        self._touch()
 
     def open_channel(self, n: int) -> Channel:
         ch = self.channels.get(n)
@@ -1110,6 +1118,7 @@ class ClientCore:
             # CR45: the channels, the chat channel (0 = none) and the shown one
             "channels": [c.summary(now) for _, c in sorted(self.channels.items())],
             "chat_ch": self.chan.n, "max_ch": MAX_CHANNELS, "monitor_n": self.monitor_n,
+            "focus": self.focus,                                        # CR75
             "radio": self.radio_state(),                                # CR46
             "axudp": self.udp.radio_state() if self.udp is not None else None,   # PLANUNG 25
             "ch": ch,

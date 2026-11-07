@@ -1,0 +1,2 @@
+- Eingehender Connect: GUI springt gleich ins Terminal des Kanals
+  (nicht bei einer bekannten TinyBox).

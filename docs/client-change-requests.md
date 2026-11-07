@@ -2128,3 +2128,25 @@ sie gespeichert, und wie wird ein User, der mit dem Client kommt, zur Eingabe ei
   (`AddressesValidTests`).
 - **Hinweis**: Ein Bitfehler, der zufällig ein gültiges Rufzeichen ergibt, kommt durch –
   dagegen hilft nur die Rauschsperre des Datenbands etwas zuzudrehen.
+
+## CR75 – Eingehender Connect: gleich ins Terminal (✅ 07.11.2026)
+
+### Erfassung (OE3GAS, 07.11.2026)
+
+Wenn eine Station mit dem Client connected, soll gleich in den Terminal-Mode umgeschaltet
+werden – außer es handelt sich um eine TinyBox.
+
+### Umsetzung (Client 2026.11.07)
+
+- Bisher: Der eingehende Connect bekam einen freien Kanal als Terminal (CR46), die GUI blieb
+  aber auf dem gerade gezeigten Kanal – nur der Chip blinkte.
+- Jetzt: Geht der eingehende Kanal online und ist die Gegenstation **keine bekannte TinyBox**,
+  setzt `ClientCore.focus_channel()` `focus = {n, seq}` im Snapshot. Die Web-GUI springt bei
+  jedem neuen `seq` auf diesen Kanal und zeigt sein Terminal (auch aus Mailbox/Chat heraus).
+  Beim Laden der Seite wird ein alter `seq` nur gemerkt, nicht angesprungen.
+- „Bekannte TinyBox“ = `known_tinybox()`: die eigene TinyBox aus `tbclient.conf` oder eine,
+  die schon einmal als TinyBox erkannt wurde (Settings `tinyboxes`). Dann bleibt die Ansicht,
+  der Chip blinkt wie bisher.
+- Gilt für AGW, KISS und AXUDP.
+- Test: `tests/test_tbclient.py` (`test_incoming_connect_over_agw`, um CR75 erweitert).
+

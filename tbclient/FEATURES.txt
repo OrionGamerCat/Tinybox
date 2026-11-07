@@ -10,6 +10,10 @@ neu ist, steht kurz in tbclient/news/<Version>.txt - das geht als
 Bulletin in die Rubrik TBNEWS.)
 
 Zuletzt dazugekommen
+- Eingehender Connect (CR75): ruft uns eine Station an, schaltet die Web-GUI
+  gleich auf das Terminal dieses Kanals. Ausnahme: eine bekannte TinyBox
+  (die eigene oder eine schon einmal als TinyBox erkannte) - dann bleibt die
+  Ansicht, wie sie ist, nur der Chip blinkt.
 - Konsole im tbclient-Fenster: I / INFO zeigt den Startblock noch einmal
   (Rufzeichen, TinyBox, Verbindung, Funkwerte, Web-GUI), H = Hilfe. Was im
   Terminal der Web-GUI getippt wird, geht wie bisher an die TinyBox.
@@ -66,7 +70,7 @@ Zuletzt dazugekommen
   stehen auch die eigenen Frames und der TNC ("PK-232 ready via KISS").
 - Eingehende Connects: ruft eine Station uns an, nimmt sie der erste freie
   Kanal als Terminal (sonst bekommt sie DM bzw. wird getrennt). Gilt fuer
-  KISS und AGW.
+  KISS, AGW und AXUDP; die GUI schaltet gleich dorthin (CR75).
 - Multi-Connect (CR45): bis zu 5 Verbindungen gleichzeitig ueber Funk, jede
   in einem eigenen Kanal. Die Kanalleiste unter der Titelleiste schaltet um
   (Klick oder Alt+1 ... Alt+5); "+ new" oeffnet einen freien Kanal, das

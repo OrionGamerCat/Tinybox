@@ -1946,6 +1946,7 @@ try { activeCh = Math.max(0, Math.min(5, parseInt(localStorage.getItem("tbc-ch")
 let pollCtl = null;           // aborts the waiting long poll when the channel changes
 const seenAct = {}, seenEnd = {};
 let manualTerm = false;       // the terminal of the TinyBox, opened by hand
+let lastFocus = null;         // CR75: focus.seq last seen (null = not yet, no jump on load)
 
 function chanOf(n) {
   const c = S && S.channels ? S.channels.find((x) => x.n === n) : null;
@@ -2492,6 +2493,10 @@ async function poll() {
                             { cache: "no-store", signal: pollCtl.signal });
       if (!r.ok) throw new Error(r.status);
       S = await r.json();
+      if (S.focus) {                                     // CR75: a station connected to us
+        if (lastFocus !== null && S.focus.seq !== lastFocus && S.focus.n) switchCh(S.focus.n);
+        lastFocus = S.focus.seq;
+      }
       if (S.ch !== activeCh) { since = -1; continue; }   // switched meanwhile
       stateRecv = performance.now();
       const endAt = Math.max(0, ...(S.channels || []).map((c) => (c.ended ? c.ended.at : 0)));   // CR44

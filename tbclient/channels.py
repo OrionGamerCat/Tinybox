@@ -127,6 +127,8 @@ class Channel:
                 self.ended = None
                 self.mode = "terminal"
                 self.act_n += 1                     # the chip blinks
+                if not self.core.known_tinybox(self.target):
+                    self.core.focus_channel(self.n)  # CR75: the GUI shows its terminal
             else:
                 self._detect_task = asyncio.ensure_future(self._detect())
         if state == "disconnecting":
