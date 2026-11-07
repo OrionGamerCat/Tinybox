@@ -1393,7 +1393,7 @@ async function sendImage() {
 // ---------------------------------------------------------------- mailbox (C3)
 /* Everything here is local in the client; only "Sync" goes on air.
  * Mail texts are untrusted as well: textContent only. */
-let view = "chat";            // chat | mail | term (CR43); channel 0 = monitor (CR45)
+let view = "chat";            // chat | mail | term (CR43) | peer (CR78); channel 0 = monitor (CR45)
 let folder = "inbox";         // inbox | outbox | sent | b:<RUBRIC> | rubrics
 let items = [];               // list of the current folder
 let itemsFor = "";            // folder + mailbox version the list belongs to
@@ -1408,14 +1408,16 @@ function setView(v) {
   view = v;
   try { localStorage.setItem("tbc-view", v); } catch (e) { /* ok */ }
   $("app").classList.toggle("view-mail", v === "mail");
-  $("app").classList.toggle("view-term", v === "term");
+  $("app").classList.toggle("view-term", v === "term" || v === "peer");   // CR78: same place
   $("app").classList.toggle("view-stats", v === "stats");      // CR61
   $("statsview").classList.toggle("hidden", v !== "stats");
   if (v === "stats") AprsStatsView.show(); else AprsStatsView.hide();
   $("mailview").classList.toggle("hidden", v !== "mail");
-  $("termview").classList.toggle("hidden", v !== "term");
+  $("termview").classList.toggle("hidden", v !== "term" && v !== "peer");
+  if ($("termview").classList.contains("peer") !== (v === "peer")) termShown = -1;   // redraw
+  $("termview").classList.toggle("peer", v === "peer");
   if (S) render();
-  if (v === "term") { const o = $("term-out"); o.scrollTop = o.scrollHeight; $("term-input").focus(); }
+  if (v === "term" || v === "peer") { const o = $("term-out"); o.scrollTop = o.scrollHeight; $("term-input").focus(); }
 }
 
 function setLevel(l) {
@@ -1946,6 +1948,7 @@ try { activeCh = Math.max(0, Math.min(10, parseInt(localStorage.getItem("tbc-ch"
 let pollCtl = null;           // aborts the waiting long poll when the channel changes
 const seenAct = {}, seenEnd = {};
 let manualTerm = false;       // the terminal of the TinyBox, opened by hand
+let peerRaw = false;          // CR78: the plain terminal of a TBClient, opened by hand
 let lastFocus = null;         // CR75: focus.seq last seen (null = not yet, no jump on load)
 
 function chanOf(n) {
@@ -1966,7 +1969,7 @@ function renderViewBtns() {
   $("btn-view").classList.toggle("on", view === "mail");
   $("btn-chat").classList.toggle("on", view === "chat");
   $("nav-monitor").classList.toggle("active", view === "term" && activeCh === 0);
-  $("nav-terminal").classList.toggle("active", view === "term" && activeCh !== 0);
+  $("nav-terminal").classList.toggle("active", (view === "term" || view === "peer") && activeCh !== 0);
   $("nav-stats").classList.toggle("active", view === "stats");
 }
 
@@ -1979,7 +1982,9 @@ function goChat() {
 
 function baseView() {
   if (activeCh === 0) return "term";
-  return curCh().chat ? "chat" : "term";
+  const c = curCh();
+  if (c.chat) return "chat";
+  return c.peer && c.state === "online" && !peerRaw ? "peer" : "term";   // CR78
 }
 const backView = () => (manualTerm && curCh().chat ? "term" : baseView());
 
@@ -1992,6 +1997,7 @@ function switchCh(n) {
   }
   activeCh = n;
   manualTerm = false;
+  peerRaw = false;
   try { localStorage.setItem("tbc-ch", String(n)); } catch (e) { /* ok */ }
   termShown = -1;                                  // the terminal shows another channel now
   monDirty = true;
@@ -2247,8 +2253,8 @@ function showLens() {                           // CR55: the APRS lens only next
 function renderTerm() {
   const out = $("term-out");
   const lines = S.ch === activeCh ? (S.term || []) : [];
-  const c = curCh(), mon = activeCh === 0;
-  $("term-title").textContent = mon ? "Monitor" : "Terminal";
+  const c = curCh(), mon = activeCh === 0, pv = view === "peer";
+  $("term-title").textContent = mon ? "Monitor" : pv ? "TBClient" : "Terminal";
   $("term-to").textContent = mon ? "everything heard on the channel"
     : c.state === "online" ? `${S.mycall} ↔ ${targetLabel(c.target, c.via)}`
       + (c.chat ? " (TinyBox: lines go to it as typed)" : "")
@@ -2261,8 +2267,10 @@ function renderTerm() {
   $("mon-ui").classList.toggle("on", uiOpen);
   showLens();
   $("term-input").disabled = c.state !== "online";
+  $("term-input").placeholder = pv ? `Message to ${c.target} (Enter = send)` : "Command (Enter = send)";
   if (S.ch !== activeCh) return;                   // lines of another channel: wait
   if (mon) { renderMonitor(); return; }
+  if (pv) { renderPeerChat(lines); return; }
   if (termShown < 0 || S.term_n < termShown || (lines.length && lines[0][0] > termShown + 1)) {
     out.replaceChildren();                       // other channel, restart, or lines missed
     termShown = lines.length ? lines[0][0] - 1 : 0;
@@ -2280,8 +2288,13 @@ function renderTerm() {
 // CR78: the other side is a TBClient - version, profile, "Heard there"
 function renderPeer(c, mon) {
   const p = !mon && c.state === "online" ? c.peer : null;
-  $("peer-info").classList.toggle("hidden", !p);
+  const pv = view === "peer";
+  $("peer-info").classList.toggle("hidden", !p || pv);
   $("peer-heard").classList.toggle("hidden", !p || !p.caps.includes("HEARD"));
+  $("peer-raw").classList.toggle("hidden", !p);
+  $("peer-raw").textContent = pv ? "Terminal" : "TBClient view";
+  $("peer-head").classList.toggle("hidden", !p || !pv);
+  if (p && pv) renderPeerHead(c, p);
   if (!p) return;
   const pr = p.prof || {};
   const parts = [`TBClient ${p.v || "?"}` + (p.newer ? " (newer)" : "")];
@@ -2289,6 +2302,56 @@ function renderPeer(c, mon) {
   if (pr.loc) parts.push(pr.loc + (pr.km !== undefined ? ` · ${pr.km} km ${compass(pr.deg)}` : ""));
   if (pr.home) parts.push("@" + pr.home);
   $("peer-info").textContent = parts.join(" · ");
+}
+
+/* CR78: own view for a TBClient on the other end - a card with who it is,
+ * the lines as bubbles (theirs left, ours right, *** notes in between). The
+ * protocol lines (//TB?, //PROF ...) are not shown; "Terminal" shows it raw. */
+const peerSeen = {};          // "ch:n" -> time the line first showed up here
+function renderPeerHead(c, p) {
+  const pr = p.prof || {};
+  const head = $("peer-head");
+  const info = el("div", "ph-info");
+  info.append(el("div", "ph-call", targetLabel(c.target, c.via)));
+  const who = [pr.name, pr.loc && (pr.loc + (pr.km !== undefined ? ` · ${pr.km} km ${compass(pr.deg)}` : "")),
+               pr.home && "home BBS " + pr.home].filter(Boolean).join(" · ");
+  info.append(el("div", "ph-who", who || "no profile sent"));
+  info.append(el("div", "ph-ver muted small", `TBClient ${p.v || "?"}` + (p.newer ? " - newer than yours" : "")
+    + ` · since ${hhmm(Math.round(Date.now() / 1000 - c.state_age))}`));
+  if (p.heard) {
+    info.append(el("div", "ph-heard small", p.heard.length
+      ? "Hears: " + p.heard.map(([call, m]) => `${call} (${m ? m + " min" : "now"})`).join(", ")
+      : "Hears nobody yet"));
+  }
+  head.replaceChildren(avatar(c.target, "", false), info);
+}
+
+function renderPeerChat(lines) {
+  const out = $("term-out");
+  if (termShown < 0 || S.term_n < termShown || (lines.length && lines[0][0] > termShown + 1)) {
+    out.replaceChildren();
+    termShown = lines.length ? lines[0][0] - 1 : 0;
+  }
+  const atBottom = out.scrollTop + out.clientHeight >= out.scrollHeight - 40;
+  const now = Date.now() / 1000;
+  for (const [n, kind, text] of lines) {
+    if (n <= termShown) continue;
+    if (kind === "tx" && text.startsWith("//")) continue;          // protocol, not a message
+    const key = activeCh + ":" + n;
+    if (!peerSeen[key]) peerSeen[key] = now;
+    if (kind === "sys") { out.append(el("div", "pb sys", text.replace(/^\*\*\* /, ""))); continue; }
+    const b = el("div", "pb " + kind);
+    b.append(el("div", "pb-t", text || " "), el("div", "pb-time", hhmm(peerSeen[key])));
+    out.append(b);
+  }
+  termShown = Math.max(termShown, S.term_n || 0);
+  while (out.childNodes.length > 600) out.firstChild.remove();
+  if (atBottom) out.scrollTop = out.scrollHeight;
+}
+
+function peerToggle() {
+  peerRaw = view === "peer";
+  setView(baseView());
 }
 
 async function peerHeard() {
@@ -2601,6 +2664,7 @@ async function start() {
   });
   $("btn-term").onclick = openTerm;
   $("peer-heard").onclick = peerHeard;                         // CR78
+  $("peer-raw").onclick = peerToggle;
   const monRedraw = () => { monDirty = true; if (S && activeCh === 0) { renderMonitor(); $("term-out").scrollTop = $("term-out").scrollHeight; } };
   $("mon-ui").onclick = uiToggle;                              // CR66
   $("ui-form").addEventListener("submit", uiSend);

@@ -2226,10 +2226,24 @@ freischalten.
 - Dazu: `//TB BOX` kommt jetzt auf einer eigenen Zeile (TinyBox); steht es bei einer älteren
   TinyBox direkt hinter dem Prompt, trennt der Client es ab (`test_tb_box_behind_the_prompt`).
 
+### Stufe 2: eigene Ansicht „TBClient“ (Client 2026.11.07.5)
+
+- **Wunsch (OE3GAS):** Nach dem Connect zu einem TBClient nicht das Terminal, sondern eine
+  eigene Ansicht, an der man sieht, dass man mit einem TBClient verbunden ist.
+- **Umsetzung (`app.js`, Ansicht `peer`):** Sobald der Kanal einen Peer hat, schaltet die GUI
+  von selbst um (beide Seiten, beim Angerufenen mit CR75). Oben eine Karte: Rufzeichen (mit
+  Digi-Pfad), Name, Locator, Entfernung/Richtung, Home-BBS, TBClient-Version, seit wann
+  verbunden, zuletzt „Hears: …“. Darunter die Zeilen als Sprechblasen – die eigenen rechts, die
+  des anderen links, mit Uhrzeit; `***`-Hinweise klein dazwischen, Protokollzeilen (`//TB?` …)
+  ausgeblendet. Eingabe „Message to <call>“. Knopf „Terminal“ ↔ „TBClient view“ schaltet auf
+  die rohe Terminal-Ansicht und zurück; „Heard there“ wie bisher.
+- Die Uhrzeit der Blasen ist die, zu der die Zeile in der GUI erschienen ist (nach Neuladen der
+  Seite die Zeit des Neuladens).
+
 ### Später (eigene Stufen)
 
 - Linkqualität beider Seiten (Retries/REJ, Balken wie `%Q`).
-- Chat-Ansicht statt Terminal (Sprechblasen, Emoticons, Reaktionen).
+- Emoticons/Emoji und Reaktionen in der TBClient-Ansicht.
 - Bilder direkt (CR12-Verfahren, binär).
 - Direkte Nachricht/Datei mit LZHUF.
 - Uhrzeitabgleich.

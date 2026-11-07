@@ -15,7 +15,9 @@ Zuletzt dazugekommen
   ein anderer TBClient //TB CLIENT, alle anderen Stationen nichts.
 - Client zu Client (CR78): zwei TBClients erkennen sich; Profil (Name,
   Locator, Entfernung/Richtung, Home-BBS) und Version in der Terminal-
-  Leiste, Knopf "Heard there" fragt, wen der andere hoert.
+  Leiste, Knopf "Heard there" fragt, wen der andere hoert. Eigene Ansicht
+  "TBClient": Karte mit Profil, Entfernung und Version, die Zeilen als
+  Sprechblasen; "Terminal" zeigt die rohe Ansicht.
 - max_channels in tbclient.conf: 1 bis 10 Verbindungen gleichzeitig
   (Standard 5), Alt+1 ... Alt+9.
 - Eingehender Connect (CR75): ruft uns eine Station an, schaltet die Web-GUI

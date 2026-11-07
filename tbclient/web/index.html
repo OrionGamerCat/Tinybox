@@ -172,6 +172,7 @@
         <button id="mon-clear" class="sm">Clear</button>
       </span>
       <button id="peer-heard" class="sm hidden" title="Ask the other TBClient which stations it hears (CR78)">Heard there</button>
+      <button id="peer-raw" class="sm hidden" title="Switch between the TBClient view and the plain terminal">Terminal</button>
       <button id="term-close" class="sm">Back to chat</button></div>
     <form id="ui-form" class="ui-form hidden" autocomplete="off" aria-label="Send a UI frame">
       <label>To <input id="ui-dest" type="text" value="CQ" maxlength="9" spellcheck="false" autocapitalize="characters" aria-label="Destination call"></label>
@@ -181,6 +182,7 @@
       <button type="submit" class="primary sm">Send</button>
       <span id="ui-msg" class="small"></span>
     </form>
+    <div id="peer-head" class="peer-head hidden" aria-label="The other TBClient"></div>
     <div class="term-split">
       <pre id="term-out" class="term-out" aria-live="polite"></pre>
       <aside id="aprs-lens" class="ar-lens" aria-label="APRS Lense" hidden></aside>

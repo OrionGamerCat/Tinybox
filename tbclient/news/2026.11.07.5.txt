@@ -1,0 +1,2 @@
+- Eigene Ansicht fuer Verbindungen zu einem anderen TBClient:
+  Karte mit Profil/Entfernung, Zeilen als Sprechblasen.
