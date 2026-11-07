@@ -2,6 +2,8 @@
 
 ## Unveröffentlicht
 
+- Sysop-Web-GUI, Nachricht lesen: **„To“ mit @-Adresse** (z. B. `TEST @ WW`), der Kopf ist
+  kompakter (jeder Eintrag so breit wie sein Wert statt vier fester Spalten).
 - TinyBox-Chat: **weniger `%Q`-Frames** – keine `%Q`-Zeile, solange alle Balken noch `?` sind;
   ist nur eine Station im Board, geht ihr `%Q` per I-Frame nur an sie statt als UI-Frame an
   TBCHAT-n (PLANUNG 14.6).

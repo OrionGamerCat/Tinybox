@@ -1065,11 +1065,11 @@ function renderReader(article, m, onReply) {
       h("div", { class: "reader-top" },
         h("h1", { text: m.subject }),
         h("div", { class: "meta-grid" },
-          kv("From", m.from, true), kv("To", m.to, true),
+          kv("From", m.from, true), kv("To", m.at ? m.to + " @ " + m.at : m.to, true),
           kv("Type / Status", [m.type === "P" ? "Private · " : "Bulletin · ", statusTag]),
           kv("Date (UTC)", fullDate(m.created), true),
           kv("Size", m.size + " bytes", true), kv("Origin", m.origin),
-          kv("Msg-ID", m.msgid, true, "wide"))),
+          kv("Msg-ID", m.msgid, true))),
       h("div", { class: "body", text: m.body })));
 }
 
