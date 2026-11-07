@@ -11,11 +11,14 @@ with differences: per direction the last 50 frames, at most 30 minutes.
     out  (TinyBox -> station):  i_retry / (i_new + i_retry)
     in   (station -> TinyBox):  (rej_tx + retry_rx) / i_rx
 
-A direction counts only with at least 20 frames in its window. The worse
-direction gives the bars: 5 up to 5 % loss, 4 up to 10 %, 3 up to 20 %, 2 up
-to 35 %, 1 up to 50 %, and 0 = one red bar above that (12.10.2026). Each T1
-timeout in the window costs one more bar. No direction with enough frames ->
-no result yet (grey bars).
+With at least 20 frames (min_frames) a direction is rated by its loss: 5 bars
+up to 5 %, 4 up to 10 %, 3 up to 20 %, 2 up to 35 %, 1 up to 50 %, and 0 = one
+red bar above that (12.10.2026). With fewer frames (1 ... 19, 07.11.2026) the
+events count instead of the percentage - a single repeat among 5 frames would
+be 20 % and 3 bars: 0 repeats/REJ = 5 bars, each one costs a bar, 5 or more =
+the red bar. Such a result is "tentative" (the GUIs show it paler) as long as no
+direction has min_frames. The worse direction gives the bars; each T1 timeout
+in the window costs one more. No frames at all -> no result (grey bars).
 
 TinyBox clients in UI mode get the chat as UI frames, which nobody acks. For
 them RxWindow counts the UI events sent and the ones the client asked for again
@@ -65,6 +68,18 @@ class Direction:
     lost: int = 0            # repeated / missed frames in the window
     enough: bool = False
 
+    def bars(self, steps: tuple[float, ...]) -> int | None:
+        """0..5 for this direction alone; None = no frames. Below min_frames
+        (not enough): by the number of events, not the percentage (07.11.2026)."""
+        if self.frames <= 0:
+            return None
+        if not self.enough:
+            return max(0, 5 - self.lost)
+        for n, limit in zip((5, 4, 3, 2, 1), steps):
+            if self.loss <= limit:
+                return n
+        return 0
+
     @property
     def loss(self) -> float | None:
         """Loss in percent, None without enough frames."""
@@ -87,6 +102,7 @@ class Result:
     bytes_retry: int
     srt: float
     rx: Direction | None = None   # UI events of a client (receive quote), if any
+    tentative: bool = False       # fewer than min_frames in every direction rated
 
     @property
     def rx_quote(self) -> float | None:
@@ -162,20 +178,18 @@ class LinkQuality:
         worse_out = out
         if rx is not None and rx.loss is not None and (out.loss is None or rx.loss > out.loss):
             worse_out = rx
-        losses = [x.loss for x in (worse_out, inn) if x.loss is not None]
+        rated = [(x, x.bars(self.cfg.steps)) for x in (worse_out, inn)]
+        rated = [(x, b) for x, b in rated if b is not None]
         bars = None
-        if losses:
-            worst = max(losses)
-            bars = 0                                   # above the last step: one red bar
-            for n, limit in zip((5, 4, 3, 2, 1), self.cfg.steps):
-                if worst <= limit:
-                    bars = n
-                    break
-            bars = max(0, bars - t1)
+        tentative = False
+        if rated:
+            bars = max(0, min(b for _, b in rated) - t1)
+            tentative = not any(x.enough for x, _ in rated)
         return Result(bars=bars, out=out, inn=inn, t1=t1,
                       rej_rx=d("rej_rx", bo), rej_tx=d("rej_tx", bi), retry_rx=d("retry_rx", bi),
                       i_retry=d("i_retry", bo), bytes_new=d("bytes_new", bo),
-                      bytes_retry=d("bytes_retry", bo), srt=cur["srt"], rx=rx)
+                      bytes_retry=d("bytes_retry", bo), srt=cur["srt"], rx=rx,
+                      tentative=tentative)
 
 
 class RxWindow:
@@ -243,14 +257,15 @@ def bar_code(r: Result | None) -> str:
     return "?" if r is None or r.bars is None else str(r.bars)
 
 
-def bar_text(bars: int | None) -> str:
+def bar_text(bars: int | None, tentative: bool = False) -> str:
     """Text form for terminals: '#####' best, '#....' poor, 'X....' the red bar
-    (more than half lost), '-----' no result yet."""
+    (more than half lost), '-----' no result yet; '~' instead of '#' = tentative
+    (fewer than min_frames)."""
     if bars is None:
         return "-----"
     if bars == 0:
         return "X...."
-    return "#" * bars + "." * (5 - bars)
+    return ("~" if tentative else "#") * bars + "." * (5 - bars)
 
 
 def kbytes(n: int) -> str:

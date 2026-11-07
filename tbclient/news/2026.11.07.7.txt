@@ -1,0 +1,2 @@
+- Linkqualitaet schon ab dem ersten Frame: unter 20 Frames kostet
+  jede Wiederholung einen Balken (blasser = vorlaeufig).

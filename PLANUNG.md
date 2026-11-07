@@ -1017,7 +1017,14 @@ Pro Richtung eine Verlustquote:
 | Station → TinyBox | (`rej_tx` + `retry_rx`) / empfangene I-Frames | wie links |
 
 - **Fenster:** die letzten **50 Frames pro Richtung, höchstens aber die letzten 30 Minuten** – was zuerst greift (TinyBox bildet Differenzen zwischen den Abfragen). Zeigt den aktuellen Zustand, nicht den Durchschnitt seit Verbindungsaufbau. Die Zeitgrenze kam nach dem ersten Funktest dazu: in 40 Minuten BBS-/Chat-Betrieb fielen nur 21 bzw. 13 Frames an, 50 Frames hätten also weit über eine Stunde zurückgereicht.
-- **Mindestmenge:** eine Richtung zählt erst ab **20 Frames**. Hat keine Richtung 20 Frames → noch kein Ergebnis.
+- **Mindestmenge:** nach Prozent wird eine Richtung erst ab **20 Frames** bewertet.
+  **Geändert 07.11.2026 (OE3GAS):** Darunter (1–19 Frames) zählen die Ereignisse statt der
+  Prozente – 5 saubere Frames sind schon ein sehr guter Link, eine einzelne Wiederholung unter
+  5 Frames wären aber 20 % und 3 Balken: 0 Wiederholungen/REJ → 5 Balken, jede kostet einen
+  Balken, ab 5 → roter Balken; T1 kostet wie immer einen Balken. Das Ergebnis heißt
+  **vorläufig** (`Result.tentative`, solange keine bewertete Richtung 20 Frames hat) und wird
+  blasser gezeigt (TinyBox-Web, Client, `STAT` mit `~~~~~` statt `#####`). Ohne Frames graue
+  Balken. Gilt für TinyBox und Client (`prcore/linkq.py`).
 - **Die schlechtere Richtung bestimmt die Balken.**
 - **Schwellen** (geändert 12.10.2026, in `tinybox.conf` einstellbar):
 

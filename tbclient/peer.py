@@ -219,17 +219,10 @@ class Peer:
         busy = last.get("tx_busy_ms", 0)
         steps = self.quality.cfg.steps
 
-        def bars(d):
-            if d.loss is None:
-                return None
-            for n, limit in zip((5, 4, 3, 2, 1), steps):
-                if d.loss <= limit:
-                    return n
-            return 0
-        return {"bars": r.bars, "out": {"frames": r.out.frames, "lost": r.out.lost,
-                                        "loss": r.out.loss, "bars": bars(r.out)},
-                "in": {"frames": r.inn.frames, "lost": r.inn.lost, "loss": r.inn.loss,
-                       "bars": bars(r.inn)},
+        def side(d):
+            return {"frames": d.frames, "lost": d.lost, "loss": d.loss, "bars": d.bars(steps),
+                    "tent": d.frames > 0 and not d.enough}   # few frames: repeats count
+        return {"bars": r.bars, "tentative": r.tentative, "out": side(r.out), "in": side(r.inn),
                 "t1": r.t1, "rej_rx": r.rej_rx, "rej_tx": r.rej_tx, "srt": r.srt,
                 "rate": round(last.get("bytes_new", 0) * 1000 / busy) if busy else None,
                 "age": round(now - self.q_at)}

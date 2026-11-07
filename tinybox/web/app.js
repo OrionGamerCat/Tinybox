@@ -565,7 +565,8 @@ function messagesCard(opts) {
 // q = session.quality from the API: bars 0..5 (0 = one red bar), null = no result yet.
 function barsEl(q, big) {
   const bars = q ? q.bars : null;
-  const cls = "bars" + (big ? " big" : "") + (bars === null ? " none" : bars === 0 ? " red" : "");
+  const cls = "bars" + (big ? " big" : "") + (bars === null ? " none" : bars === 0 ? " red" : "")
+    + (q && q.tentative ? " tent" : "");
   const kids = [];
   for (let i = 1; i <= 5; i++)
     kids.push(h("i", { class: bars !== null && i > Math.max(bars, 1) ? "off" : "" }));
@@ -573,15 +574,16 @@ function barsEl(q, big) {
 }
 function barsTitle(q) {
   if (!q) return "no link quality data";
-  if (q.bars === null) return "not enough frames yet";
+  if (q.bars === null) return "no frames yet";
+  if (q.tentative) return q.bars + " of 5 bars, tentative: fewer than " + q.min_frames + " frames, each repeat costs a bar";
   return q.bars + " of 5 bars" + (q.worst ? " - worst: " + q.worst.dir + " " + q.worst.loss + " %" : "");
 }
 // short text next to the bars: the direction that set them, or how many frames are missing
 function barsNote(q) {
   if (!q) return "";
-  if (q.bars === null) {
+  if (q.bars === null || q.tentative) {
     const f = Math.max(q.frames.outgoing, q.frames.incoming);
-    return f + " / " + q.min_frames + " frames";
+    return f + " / " + q.min_frames + " frames" + (q.tentative ? ", tentative" : "");
   }
   return q.worst ? q.worst.dir + " " + q.worst.loss + " %" : "";
 }
@@ -1112,8 +1114,8 @@ function renderUser(card, d) {
       s.client ? h("div", { class: "meta client", text: clientText(s.client) }) : ""),
     h("div", { class: "verdict" }, barsEl(q, true),
       h("div", {},
-        h("div", { class: "num" }, q && q.bars !== null ? [String(q.bars), h("small", { text: " / 5 bars" })]
-                                                        : h("small", { text: q ? "not enough frames yet" : "no data" })),
+        h("div", { class: "num" }, q && q.bars !== null ? [String(q.bars), h("small", { text: " / 5 bars" + (q.tentative ? " (tentative)" : "") })]
+                                                        : h("small", { text: q ? "no frames yet" : "no data" })),
         h("div", { class: "why" }, q && q.worst ? ["worst direction: ", h("b", { text: q.worst.dir + " " + q.worst.loss + " %" }),
                                                    " \u00b7 T1 timeouts: " + q.t1] : ""))));
 
@@ -1128,7 +1130,9 @@ function renderUser(card, d) {
         h("span", { class: "pct", text: dir.enough ? pct(dir.loss) : "-" })),
       h("div", { class: "d", text: desc }),
       h("div", { class: "f" }, ...rows.flatMap(([k, v]) => [h("span", { text: k }), h("b", { text: n(v) })])),
-      h("div", { class: "formula", text: dir.enough ? formula : "needs " + w.min_frames + " frames, has " + dir.frames }));
+      h("div", { class: "formula", text: dir.enough ? formula : dir.frames
+        ? dir.frames + " frames, " + dir.lost + " repeated: under " + w.min_frames + " the repeats count (5 - " + dir.lost + ")"
+        : "no frames yet" }));
   }
   let dirs = h("div", { class: "empty", text: "No link quality data for this station yet." });
   if (r) {
@@ -1148,7 +1152,7 @@ function renderUser(card, d) {
   // --- bars from the worst direction
   // the step the worst loss lands on, before the T1 deduction (same as linkq.evaluate)
   let before = null;
-  if (q && q.bars !== null) {
+  if (q && q.bars !== null && q.worst) {
     before = 0;
     for (let k = 0; k < w.steps.length; k++) if (q.worst.loss <= w.steps[k]) { before = 5 - k; break; }
   }
@@ -1159,7 +1163,12 @@ function renderUser(card, d) {
   steps.append(h("div", { class: "step red" + (before === 0 ? " cur" : "") },
     h("div", { class: "b", text: "X" }), h("div", { class: "l", text: "> " + w.steps[w.steps.length - 1] + " %" })));
   let calc = "";
-  if (before !== null && r) {
+  if (q && q.bars !== null && !q.worst && r) {          // tentative: the repeats count
+    const lost = Math.max(r.outgoing.frames ? r.outgoing.lost : 0, r.incoming.frames ? r.incoming.lost : 0);
+    calc = h("div", { class: "calc" },
+      "fewer than " + w.min_frames + " frames in every direction: 5 − repeats of the worse direction (" + lost + ")",
+      " − T1 (" + q.t1 + ") = ", h("span", { class: "hl", text: q.bars + " bars (tentative)" }));
+  } else if (before !== null && r) {
     const parts = [["outgoing", r.outgoing.loss], ["incoming", r.incoming.loss], ["rx quote", r.rx ? r.rx.loss : null]]
       .filter((p) => p[1] !== null).map((p) => p[0] + " " + pct(p[1]));
     calc = h("div", { class: "calc" },

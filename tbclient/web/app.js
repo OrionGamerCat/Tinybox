@@ -444,12 +444,18 @@ function ago(sec) {
 /* Link quality (PLANUNG.md 14.4): 5 bars, grey = no result yet. */
 const QTEXT = { 0: "bad link, more than half lost", 1: "poor link", 2: "weak link", 3: "fair link",
                 4: "good link", 5: "very good link" };
+// fewer than min_frames in every direction: the bars count repeats, not percent
+function qTentative(q) {
+  const min = (S.qcfg && S.qcfg.min_frames) || 20;
+  return !!q && q.out_frames < min && q.in_frames < min && (!q.rx_sent || q.rx_sent < min);
+}
 function qualityBars(call) {
   if (!S.quality || !(call in S.quality)) return null;
   const n = S.quality[call];                    // 0..5, null = not enough data yet
   const known = n !== null && n !== undefined;
-  const box = el("span", "qbars" + (known ? ` q${n}` : " qnone"));
-  box.title = known ? `${QTEXT[n]} (${n}/5)` : "link quality: not enough data yet";
+  const tent = known && qTentative(S.linkq && S.linkq[call]);
+  const box = el("span", "qbars" + (known ? ` q${n}` : " qnone") + (tent ? " tent" : ""));
+  box.title = known ? `${QTEXT[n]} (${n}/5)` + (tent ? ", tentative - few frames yet" : "") : "link quality: no frames yet";
   // 0 = a single red bar
   for (let i = 1; i <= 5; i++) box.append(el("i", known && (i <= n || (n === 0 && i === 1)) ? "on" : ""));
   return box;
@@ -542,13 +548,15 @@ function renderLink() {
     const f = el("div", "f");
     for (const [k, v] of d.rows) f.append(el("span", "", k), el("b", "", String(v)));
     box.append(f, el("div", "formula", d.enough ? `${d.formula} = ${fmtPct(d.loss)}`
-                                                  : `needs ${minFrames} frames, has ${d.frames}`));
+      : d.frames ? `${d.frames} frames, ${d.lost} repeated: under ${minFrames} each repeat costs a bar`
+        : "no frames yet"));
     grid.append(box);
   }
   body.append(el("h3", "", "Directions"), grid);
   body.append(el("p", "muted small",
     `Window: last ${cfg.frames || 50} frames per direction, max. ${cfg.minutes || 30} min. ` +
-    `A direction counts from ${minFrames} frames.`));
+    `From ${minFrames} frames a direction is rated by percent, below that by the repeats `
+    + `(5 bars minus one per repeat, shown paler: tentative).`));
 
   // the step ladder
   let before = null;
@@ -2351,9 +2359,11 @@ function peerQuality(q, c) {
   row.classList.add("tap");
   row.title = "Tap: the numbers behind the bars";
   row.onclick = () => { peerQOpen = !peerQOpen; render(); };
-  row.append(el("span", "", "→ "), barsEl(q.out.bars), el("span", "", ` ${c.target}   ← `), barsEl(q.in.bars));
+  const be = (d) => { const b = barsEl(d.bars); if (d.tent) { b.classList.add("tent"); b.title += ", tentative - few frames"; } return b; };
+  row.append(el("span", "", "→ "), be(q.out), el("span", "", ` ${c.target}   ← `), be(q.in));
   if (peerQOpen) {
-    const f = (d) => d.loss === null ? `${d.frames} frames (too few)` : `${d.frames} frames, ${d.lost} again (${Math.round(d.loss * 10) / 10} %)`;
+    const f = (d) => d.loss === null ? (d.frames ? `${d.frames} frames, ${d.lost} again (tentative)` : "no frames yet")
+      : `${d.frames} frames, ${d.lost} again (${Math.round(d.loss * 10) / 10} %)`;
     const det = el("div", "ph-qd muted");
     det.append(el("div", "", "→ out: " + f(q.out)), el("div", "", "← in: " + f(q.in)),
       el("div", "", `REJ received ${q.rej_rx}, sent ${q.rej_tx} · T1 timeouts ${q.t1} · SRT ${q.srt} s`

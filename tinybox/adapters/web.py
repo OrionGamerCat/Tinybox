@@ -565,7 +565,8 @@ class WebServer:
         dirs = [("outgoing", r.out), ("incoming", r.inn), ("rx quote", r.rx)]
         known = [(n, d.loss) for n, d in dirs if d is not None and d.loss is not None]
         worst = max(known, key=lambda x: x[1]) if known else None
-        return {"bars": r.bars, "t1": r.t1,
+        return {"bars": r.bars, "t1": r.t1, "tentative": r.tentative,   # under min_frames
+                "lost": {"outgoing": r.out.lost, "incoming": r.inn.lost},
                 "worst": None if worst is None else {"dir": worst[0], "loss": round(worst[1], 1)},
                 "frames": {"outgoing": r.out.frames, "incoming": r.inn.frames},
                 "min_frames": self.app.cfg.direwolf.quality_min_frames}

@@ -2283,6 +2283,16 @@ freischalten.
   gesperrt); `POST /api/peer/clear {"ch": n}`, Snapshot `peerchat`.
 - Tests: `tests/test_peerchat.py`.
 
+### Bewertung bei wenigen Frames (07.11.2026, TinyBox und Client)
+
+- **Anmerkung (OE3GAS):** Erst ab 20 Frames zu bewerten ist zu streng – 5 Frames ohne REJ sind
+  schon ein sehr guter Link.
+- **Umsetzung (`prcore/linkq.py`, gilt für beide):** unter `quality_min_frames` (20) zählen die
+  Ereignisse statt der Prozente: 0 Wiederholungen/REJ → 5 Balken, jede kostet einen, ab 5 → rot;
+  T1 wie bisher −1. „Vorläufig“ (`tentative`), solange keine Richtung 20 Frames hat: blasser in
+  TinyBox-Web, Client-Chat, TBClient-Karte, `STAT` zeigt `~~~~~`. Ohne Frames grau. Siehe
+  PLANUNG 14.
+
 ### Später (eigene Stufen)
 
 - Emoticons/Emoji und Reaktionen in der TBClient-Ansicht.

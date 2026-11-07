@@ -109,7 +109,7 @@ reconnect_sec = 5
 quality_poll_sec      = 30     ; 0 = aus
 quality_window_frames = 50
 quality_window_min    = 30
-quality_min_frames    = 20
+quality_min_frames    = 20     ; darunter vorläufig: jede Wiederholung kostet einen Balken
 quality_steps         = 5, 10, 20, 35, 50
 
 [kiss]                         ; nur bei interface = kiss

@@ -41,19 +41,33 @@ class ParseTests(unittest.TestCase):
 
 
 class EvaluateTests(unittest.TestCase):
-    def test_grey_until_enough_frames(self):
+    def test_few_frames_count_events(self):
+        """07.11.2026: below 20 frames the events count, the result is tentative."""
         q = linkq.LinkQuality()
-        q.add(counters(i_new=10, i_rx=19, age=60), now=1000)
+        q.add(counters(i_new=5, i_rx=4, age=60), now=1000)
+        r = q.evaluate(now=1000)
+        self.assertEqual((r.bars, r.tentative), (5, True))      # 5 clean frames: very good
+        self.assertIsNone(r.out.loss)                           # no percentage yet
+        for retry, bars in ((1, 4), (2, 3), (4, 1), (5, 0), (9, 0)):
+            q = linkq.LinkQuality()
+            q.add(counters(i_new=5, i_retry=retry, age=60), now=1000)
+            self.assertEqual(q.evaluate(now=1000).bars, bars, retry)
+        q = linkq.LinkQuality()                                 # T1 costs a bar here too
+        q.add(counters(i_new=5, t1_exp=1, age=60), now=1000)
+        self.assertEqual(q.evaluate(now=1000).bars, 4)
+
+    def test_grey_without_frames(self):
+        q = linkq.LinkQuality()
+        q.add(counters(age=60), now=1000)
         r = q.evaluate(now=1000)
         self.assertIsNone(r.bars)
-        self.assertIsNone(r.out.loss)
         self.assertEqual(linkq.bar_text(r.bars), "-----")
 
     def test_one_direction_is_enough(self):
         q = linkq.LinkQuality()
         q.add(counters(i_new=25, i_rx=3, age=60), now=1000)
         r = q.evaluate(now=1000)
-        self.assertEqual(r.bars, 5)
+        self.assertEqual((r.bars, r.tentative), (5, False))    # out has 25: not tentative
         self.assertEqual(r.out.loss, 0.0)
         self.assertIsNone(r.inn.loss)
 
@@ -151,7 +165,7 @@ class StatCommandTests(unittest.TestCase):
         q.add(counters(i_new=5, age=10))
         app.service.links["OE3TEC"] = q
         s.handle_line("stat alle")
-        self.assertIn("OE3TEC     -----", t.take())
+        self.assertIn("OE3TEC     ~~~~~", t.take())              # 5 clean frames: tentative
         s.handle_line("STAT x")
         self.assertIn("Usage: STAT", t.take())
 

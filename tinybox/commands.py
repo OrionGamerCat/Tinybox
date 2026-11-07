@@ -260,7 +260,7 @@ def _stat_row(call: str, r: "linkq.Result") -> str:
     pct = lambda d: "-" if d is None or d.loss is None else f"{d.loss:.0f}%"   # noqa: E731
     rxq = r.rx_quote
     return texts.STAT_ROW.format(
-        call=call, bars=linkq.bar_text(r.bars), out=pct(r.out), inn=pct(r.inn),
+        call=call, bars=linkq.bar_text(r.bars, r.tentative), out=pct(r.out), inn=pct(r.inn),
         retry=r.i_retry, rej_rx=r.rej_rx, rej_tx=r.rej_tx, t1=r.t1,
         net=f"{linkq.kbytes(r.bytes_new)}/{linkq.kbytes(r.bytes_retry)}",
         rxq="-" if rxq is None else f"{rxq:.0f}%",

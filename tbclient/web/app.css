@@ -69,6 +69,7 @@ input { font: inherit; color: var(--text); background: var(--surface); border: 1
 /* --- link quality detail (CR33) -------------------------------------------- */
 .linkdlg { padding: 14px 16px 18px; }
 .lq-head { display: flex; align-items: center; gap: 16px; margin: 6px 0 4px; }
+.qbars.tent { opacity: .55; }               /* fewer than min_frames: tentative (07.11.2026) */
 .qbars.big { height: 36px; gap: 4px; }
 .qbars.big i { width: 8px; }
 .qbars.big i:nth-child(1) { height: 10px; } .qbars.big i:nth-child(2) { height: 16px; }
