@@ -167,6 +167,30 @@ class WebTests(unittest.TestCase):
         self.assertEqual(o["shutdown"], 200)
         self.assertTrue(o["stopped"])
 
+    def test_message_with_at_address(self):
+        """The compose form takes 'TEST @ WW' (and '$BID') like SB/SP at the terminal."""
+        async def scenario(s):
+            cookie, csrf = await self.login(s)
+            post = lambda path, body: request(s.port, "POST", path, cookie=cookie, csrf=csrf,
+                                              body=body, origin=f"http://127.0.0.1:{s.port}")
+            get = lambda path: request(s.port, "GET", path, cookie=cookie)
+            out = {}
+            st, _, p = await post("/api/messages", {"type": "B", "to": "test @ ww $X1_OE3GAS",
+                                                    "subject": "Fwd", "body": "x"})
+            out["create"] = st
+            st, _, p = await get("/api/messages/" + str(json.loads(p)["id"]))
+            out["read"] = json.loads(p)
+            st, _, p = await post("/api/messages", {"type": "B", "to": "TEST @ W#W",
+                                                    "subject": "x", "body": "x"})
+            out["bad"] = (st, json.loads(p)["error"])
+            return out
+
+        o = self.run_async(scenario)
+        self.assertEqual(o["create"], 200)
+        self.assertEqual((o["read"]["to"], o["read"]["at"], o["read"]["bid"]),
+                         ("TEST", "WW", "X1_OE3GAS"))
+        self.assertEqual(o["bad"], (400, "invalid_address"))
+
     def test_restart_rubrics_and_logins_survive(self):
         """Dashboard: Restart button (checks tinybox.conf), rubrics list; a login
         survives a restart of the web server."""

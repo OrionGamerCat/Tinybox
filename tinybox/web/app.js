@@ -29,6 +29,9 @@ const ERRORS = {
   not_found: "No such message",
   not_allowed: "Not allowed",
   invalid_value: "Invalid value",
+  invalid_address: "Invalid @ address",
+  duplicate: "BID already known",
+  no_forward: "Forwarding is off - no private mail to another mailbox",
 };
 
 // ---- helpers ---------------------------------------------------------------
@@ -851,7 +854,7 @@ function composeCard(prefill) {
     type = t;
     labelP.classList.toggle("on", t === "P"); labelP.firstChild.checked = t === "P";
     labelB.classList.toggle("on", t === "B"); labelB.firstChild.checked = t === "B";
-    to.placeholder = t === "B" ? "ALL" : "Callsign";
+    to.placeholder = t === "B" ? "ALL  or  TEST @ WW" : "Callsign  or  OE1ABC @ OE1XAB.#WIE.AUT.EU";
   }
   labelP.firstChild.addEventListener("change", () => setType("P"));
   labelB.firstChild.addEventListener("change", () => setType("B"));

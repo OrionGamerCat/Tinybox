@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+- Sysop-Web-GUI, neue Nachricht: **„To“ nimmt eine @-Adresse** (und `$BID`) wie `SB`/`SP` am
+  Terminal, z. B. `TEST @ WW` oder `OE1ABC @ OE1XAB.#WIE.AUT.EU`; Fehlermeldungen für
+  ungültige Adresse, bekannte BID und Forwarding aus.
 - Sysop-Web-GUI, Nachricht lesen: **„To“ mit @-Adresse** (z. B. `TEST @ WW`), der Kopf ist
   kompakter (jeder Eintrag so breit wie sein Wert statt vier fester Spalten).
 - TinyBox-Chat: **weniger `%Q`-Frames** – keine `%Q`-Zeile, solange alle Balken noch `?` sind;

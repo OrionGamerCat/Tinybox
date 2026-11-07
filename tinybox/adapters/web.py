@@ -404,7 +404,8 @@ class WebServer:
                 return self._channel()
         else:
             if parts == ["messages"]:
-                msg_id = svc.create(from_call=sysop, to_call=str(data.get("to", "")),
+                to_call, at_addr, bid = self._split_to(str(data.get("to", "")))
+                msg_id = svc.create(from_call=sysop, to_call=to_call, at_addr=at_addr, bid=bid,
                                     type=str(data.get("type", "P")),
                                     subject=str(data.get("subject", "")),
                                     body=str(data.get("body", "")).replace("\r\n", "\n"),
@@ -469,6 +470,14 @@ class WebServer:
         if not value.isdigit():
             raise HttpError(400, "number expected")
         return int(value)
+
+    @staticmethod
+    def _split_to(to: str) -> tuple[str, str, str | None]:
+        """'TEST @ WW $BID' as at the terminal (SP/SB call @ address $BID):
+        returns (recipient, @ address, BID); the service checks all three."""
+        rest, _, bid = to.partition("$")
+        call, _, at_addr = rest.partition("@")
+        return call.strip(), at_addr.strip(), bid.strip() or None
 
     @staticmethod
     def _msg(m, body: bool = False) -> dict:
