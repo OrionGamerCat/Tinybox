@@ -1621,7 +1621,7 @@ function msgItem(m) {
   const left = el("span");
   left.append(el("span", "muted small", "#" + m.id + " "));
   if (!m.has_body) {                             // CR40: the text comes when clicked
-    const t = el("span", "tag", "not loaded · " + kbText(m.size));
+    const t = el("span", "tag notloaded", "not loaded · " + kbText(m.size));
     t.title = "Click to fetch the text";
     left.append(t);
   }
@@ -2263,10 +2263,16 @@ function renderTerm() {
   const lines = S.ch === activeCh ? (S.term || []) : [];
   const c = curCh(), mon = activeCh === 0, pv = view === "peer";
   $("term-title").textContent = mon ? "Monitor" : pv ? "TBClient" : "Terminal";
-  $("term-to").textContent = mon ? "everything heard on the channel"
-    : c.state === "online" ? `${S.mycall} ↔ ${targetLabel(c.target, c.via)}`
-      + (c.chat ? " (TinyBox: lines go to it as typed)" : "")
-    : c.target ? `${c.target} - not connected` : "not connected - enter a call in the top bar";
+  if (pv) {                                       // TBClient view: a status chip
+    $("term-to").replaceChildren(c.state === "online"
+      ? el("span", "st-chip ok", `connected to ${targetLabel(c.target, c.via)}`)
+      : el("span", "st-chip warn", `${c.target} not connected`));
+  } else {
+    $("term-to").textContent = mon ? "everything heard on the channel"
+      : c.state === "online" ? `${S.mycall} ↔ ${targetLabel(c.target, c.via)}`
+        + (c.chat ? " (TinyBox: lines go to it as typed)" : "")
+      : c.target ? `${c.target} - not connected` : "not connected - enter a call in the top bar";
+  }
   $("term-close").classList.toggle("hidden", !c.chat || mon);
   renderPeer(c, mon);
   $("term-form").classList.toggle("hidden", mon);
@@ -2325,8 +2331,10 @@ function renderPeerHead(c, p) {
   const who = [pr.name, pr.loc && (pr.loc + (pr.km !== undefined ? ` · ${pr.km} km ${compass(pr.deg)}` : "")),
                pr.home && "home BBS " + pr.home].filter(Boolean).join(" · ");
   info.append(el("div", "ph-who", who || "no profile sent"));
-  info.append(el("div", "ph-ver muted small", `TBClient ${p.v || "?"}` + (p.newer ? " - newer than yours" : "")
-    + (c.state === "online" ? ` · since ${hhmm(Math.round(Date.now() / 1000 - c.state_age))}` : " · not connected")));
+  const ver = el("div", "ph-ver muted small", `TBClient ${p.v || "?"}` + (p.newer ? " - newer than yours" : "")
+    + (c.state === "online" ? ` · since ${hhmm(Math.round(Date.now() / 1000 - c.state_age))}` : " "));
+  if (c.state !== "online") ver.append(el("span", "st-chip warn", "not connected"));
+  info.append(ver);
   info.append(peerQuality(p.q, c));
   if (p.heard) {
     info.append(el("div", "ph-heard small", p.heard.length

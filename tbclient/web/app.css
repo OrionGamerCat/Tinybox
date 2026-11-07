@@ -212,6 +212,11 @@ input { font: inherit; color: var(--text); background: var(--surface); border: 1
   border-bottom: 1px solid var(--line); }
 .term-bar .sp { flex: 1; }
 .peer-info { color: var(--accent); }
+/* status chips: connected (green) / not connected, not loaded (orange) */
+.st-chip { display: inline-block; border-radius: 10px; padding: 1px 9px; font-size: 12px; font-weight: 600;
+  color: #fff; white-space: nowrap; vertical-align: middle; }
+.st-chip.ok { background: var(--ok); }
+.st-chip.warn { background: var(--warn); }
 /* CR78: own view for a TBClient on the other end */
 .peer-head { display: flex; gap: 12px; align-items: center; padding: 10px 14px; background: var(--surface);
   border-bottom: 1px solid var(--line); }
@@ -714,3 +719,4 @@ button.danger:hover { color: var(--bad); border-color: var(--bad); }
 @media (max-width: 699px) {
   .board-head { display: none !important; }
 }
+.tag.notloaded { background: var(--warn); color: #fff; }   /* CR40: text not fetched yet */

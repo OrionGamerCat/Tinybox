@@ -2284,6 +2284,13 @@ freischalten.
   gesperrt); `POST /api/peer/clear {"ch": n}`, Snapshot `peerchat`.
 - Tests: `tests/test_peerchat.py`.
 
+### Status-Chips (Client 2026.11.07.9)
+
+- **Wunsch (OE3GAS, 07.11.2026):** „not connected“ als orangefarbener Chip (Kopfzeile und Karte
+  der TBClient-Ansicht), neben „TBClient“ ein grüner Chip „connected to <call>“, in der
+  Bulletin-/Mail-Liste „not loaded · Größe“ als orangefarbener Chip.
+- Umsetzung: `.st-chip.ok` / `.st-chip.warn` (`--ok`/`--warn`), `.tag.notloaded`.
+
 ### Bewertung bei wenigen Frames (07.11.2026, TinyBox und Client)
 
 - **Anmerkung (OE3GAS):** Erst ab 20 Frames zu bewerten ist zu streng – 5 Frames ohne REJ sind

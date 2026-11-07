@@ -1,0 +1,2 @@
+- Farbige Chips: connected (gruen), not connected und not loaded
+  (orange).
