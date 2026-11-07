@@ -6,7 +6,7 @@ Started by __main__ only when enabled; without it TinyBox is a standalone mailbo
   partner(s) the router picks; deleted / expired mail leaves the queue
 - answers partner connects: over AGW (the AGW adapter hands them over) and on
   the TCP forward port ([forward] listen_port, with callsign + password login)
-- calls partners: FWD <call> on the sysop console, or by itself (scheduler):
+- calls partners: FWD (all) or FWD <call> on the sysop console, or by itself (scheduler):
   when mail waits for a partner with auto = yes, every interval_min minutes if
   set, only inside the partner's window; after a failure, and for mail the
   partner wanted "later", it waits retry_min

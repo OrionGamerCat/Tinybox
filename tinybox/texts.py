@@ -219,9 +219,9 @@ HELP_CONSOLE = [
     "  UPDATE     Ask GitHub now for a new release (otherwise once a day)",
     "  UPDATE NEWS  Send the TBNEWS bulletin of the new release now",
     "  WEB        Show the web GUI login link",
-    "  FWD        Forward status of all partners",
-    "  FWD call   Connect to a partner mailbox now",
-    "  FWQ        Messages waiting for forwarding",
+    "  FWD        Forward with all partner mailboxes now (one after the other)",
+    "  FWD call   Forward with this partner mailbox now",
+    "  FWQ        Forward status of the partners and messages waiting",
     "  HOLD n     Keep message n from forwarding (held, only the sysop sees it)",
     "  REL n      Release message n: forward it, or make it a normal local message",
     "  SHUTDOWN [s]   Stop TinyBox in s seconds (default 60), users are warned",
@@ -287,6 +287,8 @@ FWD_OFF = "Forwarding is off ([forward] enabled = no)."
 FWD_START = "Connecting to {call} ..."
 FWD_DONE = "Forward {call}: {result}"
 FWD_FAILED = "Forward {call} failed: {error}"
+FWD_NONE = "No forward partners ([partner.CALL] in tinybox.conf)."
+FWD_BUSY = "Forward {call}: already in a session."
 FWQ_EMPTY = "Forward queue is empty."
 FWQ_HEADER = "Partner  Msg#  State  Since (UTC)"
 FWQ_ROW = "{partner:<8} {id:>4}  {state:<6} {changed}"

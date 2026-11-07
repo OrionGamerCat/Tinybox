@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+- Sysop-Konsole: **`FWD` ohne Rufzeichen startet den Forward mit allen Partnern** (nacheinander,
+  ein Funkkanal); `FWD call` nur mit diesem Partner. Der Partnerstatus steht jetzt bei `FWQ`
+  über der Warteschlange.
 - Sysop-Web-GUI, neue Nachricht: **„To“ nimmt eine @-Adresse** (und `$BID`) wie `SB`/`SP` am
   Terminal, z. B. `TEST @ WW` oder `OE1ABC @ OE1XAB.#WIE.AUT.EU`; Fehlermeldungen für
   ungültige Adresse, bekannte BID und Forwarding aus.

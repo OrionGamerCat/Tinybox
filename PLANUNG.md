@@ -901,7 +901,7 @@ Ausführliches Konzept mit Protokollen, Routing, Testfällen und Quellen: Claude
 - **Routing (BPQ-Modell):** Persönliche Post an den Partner mit dem besten Treffer von rechts, Bulletins an alle Partner mit passendem Verteilgebiet (erstes Element des @-Feldes). Nie zurück an einen Partner aus den R:-Zeilen. Ohne Treffer Status `H`.
 - **Duplikate:** Tabelle `bids` mit Aufbewahrung `bid_days`. Umgang mit bekannter BID/MID je nach SID der Gegenseite (Entscheidung 06.10.2026, siehe Konzept-Doc).
 - **brocast:** Fremd-Bulletins gehen nur ins Karussell, wenn `[forward] publish_to_brocast = yes` (Standard `no`).
-- **Sysop:** `FWD` (Partner anzeigen), `FWD call` (Forward anstoßen), `FWQ` (Warteschlange), `HOLD n` / `REL n` (Nachricht halten / freigeben). Die Web-GUI zeigt im Kopf „Forward: n queued · n held“, mit den Partnern als Tooltip.
+- **Sysop:** `FWD` (Forward mit allen Partnern, nacheinander), `FWD call` (nur mit diesem Partner), `FWQ` (Partnerstatus und Warteschlange; seit 07.11.2026, vorher zeigte `FWD` den Status), `HOLD n` / `REL n` (Nachricht halten / freigeben). Die Web-GUI zeigt im Kopf „Forward: n queued · n held“, mit den Partnern als Tooltip.
 
 **Stand der Meilensteine**
 

@@ -257,32 +257,39 @@ class SysopConsole:
                  else "Web GUI is disabled ([web] enabled = no).")
 
     def cmd_fwd(self, arg: str) -> None:
-        """FWD: forward status; FWD call: connect to that partner now."""
+        """FWD: call every partner now, one after the other (one radio channel);
+        FWD call: only that partner. The partner status is part of FWQ."""
         fwd = self.app.forward
         if fwd is None:
             self.out(texts.FWD_OFF)
             return
-        if not arg:
-            self.out(*fwd.status_lines())
+        calls = [normalize_call(arg.split()[0])] if arg else list(fwd.cfg.partners)
+        if not calls:
+            self.out(texts.FWD_NONE)
             return
-        call = normalize_call(arg.split()[0])
 
         async def go() -> None:
-            try:
-                r = await fwd.call(call)
-                self.out(texts.FWD_DONE.format(call=call, result=r.summary()))
-            except Exception as exc:          # tell the sysop, keep the console alive
-                self.out(texts.FWD_FAILED.format(call=call, error=exc or type(exc).__name__))
+            for call in calls:
+                if call in fwd.busy:          # e.g. the partner is calling us right now
+                    self.out(texts.FWD_BUSY.format(call=call))
+                    continue
+                self.out(texts.FWD_START.format(call=call))
+                try:
+                    r = await fwd.call(call)
+                    self.out(texts.FWD_DONE.format(call=call, result=r.summary()))
+                except Exception as exc:      # tell the sysop, keep the console alive
+                    self.out(texts.FWD_FAILED.format(call=call, error=exc or type(exc).__name__))
             self.session.prompt()
 
-        self.out(texts.FWD_START.format(call=call))
         fwd._spawn(go())
 
     def cmd_fwq(self, arg: str) -> None:
-        """FWQ: messages waiting for forwarding."""
-        if self.app.forward is None:
+        """FWQ: partner status and the messages waiting for forwarding."""
+        fwd = self.app.forward
+        if fwd is None:
             self.out(texts.FWD_OFF)
             return
+        self.out(*fwd.status_lines())
         rows = self.app.store.fwd_queue_list()
         if not rows:
             self.out(texts.FWQ_EMPTY)

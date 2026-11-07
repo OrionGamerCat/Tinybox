@@ -74,6 +74,38 @@ class ConsoleTests(unittest.TestCase):
         self.assertIn("1 private", out)
         self.assertIn("1 unread", out)
 
+    def test_fwd_without_call_forwards_with_every_partner(self):
+        """FWD alone calls all partners one after the other; FWD call only that one."""
+        calls = []
+
+        class Result:
+            def summary(self):
+                return "ok"
+
+        class StubForward:
+            cfg = type("C", (), {"partners": {"OE3GAS": None, "OE1XAB": None}})()
+            busy = {"OE1XAB"}
+
+            async def call(self, call):
+                calls.append(call)
+                return Result()
+
+            def status_lines(self):
+                return ["Forward: 2 partner(s)"]
+
+            def _spawn(self, coro):
+                asyncio.run(coro)
+
+        self.app.forward = StubForward()
+        out = self.run_cmd("FWD")
+        self.assertEqual(calls, ["OE3GAS"])
+        self.assertIn("Forward OE3GAS: ok", out)
+        self.assertIn("Forward OE1XAB: already in a session.", out)
+        calls.clear()
+        self.run_cmd("FWD oe3gas")
+        self.assertEqual(calls, ["OE3GAS"])
+        self.assertIn("Forward: 2 partner(s)", self.run_cmd("FWQ"))
+
     def test_shutdown(self):
         self.assertIn("Shutting down", self.run_cmd("SHUTDOWN"))
         self.assertTrue(self.app.stop_event.is_set())
