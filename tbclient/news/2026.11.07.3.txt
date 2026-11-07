@@ -1,0 +1,2 @@
+- Fix: Client zu Client oder fremde Station auf dem frueheren
+  Chat-Kanal zeigte den Chat ohne Eingabe statt des Terminals.

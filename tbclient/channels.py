@@ -129,7 +129,7 @@ class Channel:
             elif self.incoming:                     # they called us: a terminal (CR46)
                 self.probed, self.peer = False, None
                 self.ended = None
-                self.mode = "terminal"
+                self._terminal()
                 self.act_n += 1                     # the chip blinks
                 if not self.core.known_tinybox(self.target):
                     self.core.focus_channel(self.n)  # CR75: the GUI shows its terminal
@@ -211,6 +211,7 @@ class Channel:
             self.core.console.append(f"[{self.n}]> {peer_mod.answer_line()}")
             kind, _, args = rest.partition(" ")
             if kind.upper() == "CLIENT" and self.peer is None:
+                self._terminal()
                 self.peer = peer_mod.Peer(self, args)
                 self.peer.start()
             return True
@@ -223,8 +224,7 @@ class Channel:
             if kind == "CLIENT" and self.peer is None:
                 if self._detect_task:
                     self._detect_task.cancel()
-                if self.mode == "":
-                    self.mode = "terminal"
+                self._terminal()
                 self.peer = peer_mod.Peer(self, args)
                 self.peer.start()
                 return True
@@ -241,10 +241,18 @@ class Channel:
             self.term_line("sys", f"*** {self.target}: TinyBox")
             self.core.attach(self, handshake=True)
         else:
-            self.mode = "terminal"
+            self._terminal()
             self.term_line("sys", f"*** {self.target}: TinyBox - terminal, the chat "
                                   f"channel is busy with another one")
             self.core.console.append(f"[{self.n}] *** {self.target}: TinyBox, terminal")
+
+    def _terminal(self) -> None:
+        """This channel is a terminal. Was it the chat channel of an earlier
+        connection (same channel number, the TinyBox went away), it is none any
+        more - else the GUI shows the chat without an input (CR78 fix)."""
+        self.mode, self.view = "terminal", "term"
+        if self.core.chan is self:
+            self.core.detach()
 
     def ask_heard(self) -> bool:
         return self.peer is not None and self.peer.ask_heard()

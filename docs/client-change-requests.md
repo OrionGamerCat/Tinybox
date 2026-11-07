@@ -2203,6 +2203,17 @@ freischalten.
   ist der andere Client neuer, steht ein Hinweis im Terminal.
 - API: `POST /api/peer/heard {"ch": n}`; Snapshot: `channels[].peer`.
 
+### Fehler behoben (Client 2026.11.07.3)
+
+- **Beobachtung** (OE3XHU ↔ OE3GAS-10): Kanal mit dem Tag „chat“, Chat-Ansicht mit „Join a
+  board first“, keine Eingabe, obwohl die Kopfzeile „connected · TBClient …“ zeigte.
+- **Ursache:** Der Kanal war vorher der Chat-Kanal einer TinyBox-Verbindung und blieb es nach
+  deren Ende. Früher löste das die 6-s-Erkennung (`to_terminal()` → `detach()`); seit CR76/78
+  bricht die Erkennung beim `//TB CLIENT` ab, und auch ein eingehender Connect hat nie gelöst.
+- **Umsetzung:** `Channel._terminal()` – Terminal-Modus, Ansicht Terminal, und war der Kanal
+  der Chat-Kanal, wird er gelöst. Gilt für Peer (beide Seiten), eingehenden Connect und die
+  zweite TinyBox. Test: `test_incoming_connect_over_agw`.
+
 ### Später (eigene Stufen)
 
 - Linkqualität beider Seiten (Retries/REJ, Balken wie `%Q`).

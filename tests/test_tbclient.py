@@ -621,6 +621,8 @@ class FreeConnectTests(unittest.TestCase):
                 await asyncio.wait_for(a.port.agw_up.wait(), 5)
                 await asyncio.wait_for(b.port.agw_up.wait(), 5)
                 await until(lambda: len([c for c in dw.clients if c["calls"]]) == 2)
+                # channel 1 was the chat channel of a TinyBox before (now offline)
+                a.chan, b.chan = a.open_channel(1), b.open_channel(1)
                 self.assertTrue(await b.connect("OE3GAS", ch=1))
                 await until(lambda: any(c.incoming and c.state == "online"
                                         for c in a.channels.values()))
@@ -632,6 +634,7 @@ class FreeConnectTests(unittest.TestCase):
                 await until(lambda: ca.peer is not None and cb.peer is not None)
                 self.assertEqual((ca.peer.version, cb.peer.version), (VERSION, VERSION))
                 self.assertEqual(cb.mode, "terminal")
+                self.assertFalse(ca.summary(0)["chat"] or cb.summary(0)["chat"])   # an input
                 await until(lambda: cb.peer.prof is not None)
                 self.assertEqual(cb.peer.prof["name"], "Gerhard")
                 self.assertEqual(cb.summary(0)["peer"]["prof"]["loc"], "JN88EP")
