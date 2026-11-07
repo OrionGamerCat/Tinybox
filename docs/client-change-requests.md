@@ -2214,6 +2214,18 @@ freischalten.
   der Chat-Kanal, wird er gelöst. Gilt für Peer (beide Seiten), eingehenden Connect und die
   zweite TinyBox. Test: `test_incoming_connect_over_agw`.
 
+### TinyBox in jedem Kanal (Client 2026.11.07.4)
+
+- **Beobachtung (OE3GAS):** Ein Connect zur TinyBox klappte nur auf Kanal 1.
+- **Ursache:** „Connect“ in der Chat-Ansicht („Not connected to OE3GAS-1“) und in den
+  Einstellungen schickte keinen Zielruf – der Client nahm die letzte Station *dieses Kanals*
+  bzw. die zuletzt verbundene (z. B. den TBClient OE3GAS-10). Nur Kanal 1 hatte noch die
+  TinyBox als letzte Station.
+- **Umsetzung:** `connectTinybox()` in `app.js`: Ziel ist immer die angezeigte TinyBox; im
+  gezeigten Kanal, wenn er frei ist, sonst im ersten freien.
+- Dazu: `//TB BOX` kommt jetzt auf einer eigenen Zeile (TinyBox); steht es bei einer älteren
+  TinyBox direkt hinter dem Prompt, trennt der Client es ab (`test_tb_box_behind_the_prompt`).
+
 ### Später (eigene Stufen)
 
 - Linkqualität beider Seiten (Retries/REJ, Balken wie `%Q`).

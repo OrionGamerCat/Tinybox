@@ -1,0 +1,2 @@
+- Fix: Connect im Chat verbindet die TinyBox in jedem Kanal,
+  nicht die letzte Station des Kanals.

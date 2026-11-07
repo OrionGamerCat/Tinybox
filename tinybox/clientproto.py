@@ -166,7 +166,8 @@ def tb_probe(s: Session) -> None:
     """CR76: //TB? [CLIENT v=.. caps=..] - a TBClient asks right after its connect
     what it reached. Only the answer, the session stays as it is (terminal or
     client mode); the client sends //CLIENT afterwards if it wants the chat."""
-    s.out(f"//TB BOX v={RELEASE} call={s.cfg.station.mailbox_call}")
+    # on a line of its own: the prompt before has no CR
+    s.out("", f"//TB BOX v={RELEASE} call={s.cfg.station.mailbox_call}")
 
 
 def _client(s: Session, parts: list[str]) -> None:

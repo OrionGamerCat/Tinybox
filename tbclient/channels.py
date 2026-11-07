@@ -165,6 +165,11 @@ class Channel:
             self.core._on_line(line)               # the chat engine
             return
         line = line.rstrip()
+        if self.probed and not self.incoming and not line.startswith("//") \
+                and (i := line.find(" //TB ")) >= 0:
+            # an older TinyBox: the answer right behind the prompt "... > "
+            self.term_line("rx", line[:i])
+            line = line[i + 1:]
         if line.startswith("//") and self._tb_line(line):
             self.core._touch()
             return

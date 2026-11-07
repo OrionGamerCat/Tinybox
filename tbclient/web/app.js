@@ -2000,6 +2000,17 @@ function switchCh(n) {
   if (S) render();
 }
 
+/* "Connect" in the chat view and in the settings: the TinyBox named there
+ * ("Not connected to OE3GAS-1"), in the channel shown if it is free, else in
+ * the first free one - never the last station of that channel (a TBClient or
+ * a node), which made a TinyBox reachable only in channel 1. */
+function connectTinybox() {
+  if (!S) return;
+  const c = curCh();
+  const ch = activeCh && c.state === "offline" ? activeCh : undefined;
+  api("connect", { target: S.tinybox, ch });
+}
+
 function newChannel() {
   const used = new Set((S.channels || []).map((c) => c.n));
   let n = 0;
@@ -2571,7 +2582,7 @@ async function start() {
     await api("mail/news");              // subscribe TBNEWS and fetch the bulletins
   };
   $("sys-close").onclick = () => { sysDismissed = S && S.sysmsg ? S.sysmsg.at : 0; renderSys(); };
-  $("btn-connect").onclick = $("btn-connect2").onclick = () => api("connect", { ch: activeCh || undefined });
+  $("btn-connect").onclick = $("btn-connect2").onclick = connectTinybox;
   $("btn-disconnect").onclick = () => api("disconnect");
   $("btn-disc").onclick = () => api("disconnect", { ch: activeCh });
   $("to-form").onsubmit = connectTo;

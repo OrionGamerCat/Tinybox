@@ -672,6 +672,20 @@ class FreeConnectTests(unittest.TestCase):
             a.state = "offline"
             self.assertTrue(core.can_attach(b))
 
+    def test_tb_box_behind_the_prompt(self):
+        """CR76: an older TinyBox writes //TB BOX right behind its prompt."""
+        with tempfile.TemporaryDirectory() as tmp:
+            core = ClientCore(client_cfg(tmp))
+            a, b = core.open_channel(1), core.open_channel(2)
+            a.state, a.mode = "online", "tinybox"
+            core.chan = a                         # chat channel busy: b stays a terminal
+            b.state, b.target, b.probed = "online", "OE3XYZ-1", True
+            b._on_line("TinyBox (A,B,?) > //TB BOX v=1.0.0 call=OE3XYZ-1")
+            self.assertEqual(b.mode, "terminal")
+            rx = [x for _, k, x in b.term if k == "rx"]
+            self.assertEqual(rx, ["TinyBox (A,B,?) >"])
+            self.assertTrue(any("TinyBox - terminal" in x for _, k, x in b.term if k == "sys"))
+
     def test_settings_per_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             core = ClientCore(client_cfg(tmp))
