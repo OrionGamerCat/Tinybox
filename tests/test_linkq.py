@@ -345,6 +345,26 @@ class ChatQualityTests(unittest.TestCase):
         stats = proto.parse_qstat(self.ui[-1][1])
         self.assertEqual(stats[1]["rx_missed"], 10)
 
+    def test_qstat_not_while_all_bars_unknown(self):
+        """No %Q line while no member has bars yet ('?' = only interim counts)."""
+        c, tc = _radio_client(self.app, "OE3GAS", num=True)
+        c.handle_line("C 2")                              # alone in board 2, few frames
+        self.ui.clear(); tc.take()
+        self.hub.quality_tick(self.app.service, now=1000)
+        self.assertFalse(any(t.startswith("%Q") for _, t in self.ui))
+        self.assertNotIn("%Q", tc.take())
+
+    def test_qstat_alone_as_iframe_only(self):
+        """Only one station in the board: its %Q goes to it as I-frame, no UI frame."""
+        c, tc = _radio_client(self.app, "OE3GAS", num=True)
+        c.handle_line("C 2")
+        for i in range(25):
+            c.handle_line(f"x{i}")                        # own lines: rx_sent counts up
+        self.ui.clear(); tc.take()
+        self.hub.quality_tick(self.app.service, now=1000)
+        self.assertFalse(any(t.startswith("%Q") for _, t in self.ui))
+        self.assertRegex(tc.take(), r"%Q 1 5 ")
+
     def test_stat_shows_receive_quote(self):
         for i in range(25):
             self.b.handle_line(f"x{i}")

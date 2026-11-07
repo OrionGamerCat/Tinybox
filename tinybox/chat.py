@@ -343,13 +343,14 @@ class ChatHub:
             elif s is not sender and human is not None:   # a terminal shows what was typed
                 s.out(human)
 
-    def _send_raw(self, board: str, text: str) -> None:
+    def _send_raw(self, board: str, text: str, ui: bool = True) -> None:
         """A line outside the event sequence (no number, never resent) to the NUM
-        clients of a board: once as UI frame, I-frame to the others."""
+        clients of a board: once as UI frame, I-frame to the others.
+        ui False: I-frames only."""
         members = [s for s in self.members(board) if self._num_client(s)]
         n = self.number(board)
         sent_ui = False
-        if any(s.client.ui for s in members) and self.ui_send is not None \
+        if ui and any(s.client.ui for s in members) and self.ui_send is not None \
                 and 1 <= n <= MAX_UI_BOARD:
             self.ui_send(f"{UI_DEST}-{n}", text)
             sent_ui = True
@@ -373,7 +374,7 @@ class ChatHub:
             members = self.members(b.name)
             if not members or not any(s.client for s in members):
                 continue
-            items, legacy, stats = [], [], []
+            items, legacy, stats, rated = [], [], [], False
             for s in members:
                 if linkq.is_local(s):                    # AXUDP: no bars for a local station
                     continue
@@ -384,6 +385,7 @@ class ChatHub:
                     legacy.append(f"{s.call} {linkq.bar_code(r)}")
                 if r is not None:
                     stats.append(self._qstat_item(n, r))
+                    rated = rated or r.bars is not None
             if not items:
                 continue
             text = "%" + " ".join(items)
@@ -394,11 +396,14 @@ class ChatHub:
                               legacy="%" + " ".join(legacy))
             if not stats or not any(self._num_client(s) for s in members):
                 continue
+            if not rated:                    # all bars still '?': only interim counts
+                continue
             qs = "%Q " + ";".join(stats)
             if qs != self._qs_text.get(b.name) \
                     and now - self._qs_at.get(b.name, -1e9) >= self.QSTAT_MIN_SEC:
                 self._qs_text[b.name], self._qs_at[b.name] = qs, now
-                self._send_raw(b.name, qs)
+                # alone in the board: only its own link - as I-frame to it, no UI broadcast
+                self._send_raw(b.name, qs, ui=len(members) > 1)
 
     @staticmethod
     def _qstat_item(n: int, r: "linkq.Result") -> str:

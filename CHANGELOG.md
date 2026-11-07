@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+- TinyBox-Chat: **weniger `%Q`-Frames** – keine `%Q`-Zeile, solange alle Balken noch `?` sind;
+  ist nur eine Station im Board, geht ihr `%Q` per I-Frame nur an sie statt als UI-Frame an
+  TBCHAT-n (PLANUNG 14.6).
 - TinyBox-Konsole: `INFO` zeigt am Ende wieder **Web GUI** und **Web GUI login** wie beim Start
   (der Login-Link nur in der Konsole, nie im Logfile).
 - **Startblock auf 80 Spalten** auch bei TinyBox und Client (2026.11.05.2): lange Werte und
