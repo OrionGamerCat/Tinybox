@@ -153,7 +153,8 @@
   </section>
 
   <section id="termview" class="termview hidden" aria-label="Terminal">
-    <div class="term-bar"><b id="term-title">Terminal</b> <span id="term-to" class="muted small"></span><span class="sp"></span>
+    <div class="term-bar"><b id="term-title">Terminal</b> <span id="term-to" class="muted small"></span>
+      <span id="peer-info" class="peer-info small hidden"></span><span class="sp"></span>
       <span id="mon-tools" class="mon-tools hidden">
         <button id="mon-ui" class="sm" title="Send one UI frame (unproto), e.g. to test a modem">Send UI</button>
         <input id="mon-q" type="search" placeholder="Filter" aria-label="Show only lines with this text" autocomplete="off" spellcheck="false">
@@ -170,6 +171,7 @@
         <span id="mon-aprs"></span>
         <button id="mon-clear" class="sm">Clear</button>
       </span>
+      <button id="peer-heard" class="sm hidden" title="Ask the other TBClient which stations it hears (CR78)">Heard there</button>
       <button id="term-close" class="sm">Back to chat</button></div>
     <form id="ui-form" class="ui-form hidden" autocomplete="off" aria-label="Send a UI frame">
       <label>To <input id="ui-dest" type="text" value="CQ" maxlength="9" spellcheck="false" autocapitalize="characters" aria-label="Destination call"></label>

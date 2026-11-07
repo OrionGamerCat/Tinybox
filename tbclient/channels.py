@@ -1,4 +1,4 @@
-"""Channels of the client (CR45): up to 5 connections at once, one window each,
+"""Channels of the client (CR45): up to max_channels (tbclient.conf, 1 ... 10) connections at once, one window each,
 shown one at a time. A channel owns one link and its life: state, how it ended,
 the terminal lines, the logbook row. At most one channel talks to a TinyBox in
 client mode - the chat channel (ClientCore.chan); every other channel is a
@@ -12,6 +12,7 @@ import time
 from collections import deque
 from typing import TYPE_CHECKING
 
+from . import peer as peer_mod
 from .target import label as target_label
 
 if TYPE_CHECKING:
@@ -19,7 +20,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-MAX_CHANNELS = 5
 TERM_MAX = 500            # CR43: lines kept per channel for the terminal view
 TERM_SNAPSHOT = 300       # ... and sent to the GUI
 DISC_TIMEOUT_SEC = 90     # CR42: "disconnecting" without an answer: offline anyway
@@ -54,6 +54,8 @@ class Channel:
         self._user_disc = False
         self._disc_timer: asyncio.TimerHandle | None = None
         self._detect_task: asyncio.Task | None = None
+        self.probed = False                       # CR76: //TB? sent on this connection
+        self.peer: peer_mod.Peer | None = None    # CR78: the other side is a TBClient
         self._t0 = 0.0
         self._start = ""
 
@@ -118,18 +120,21 @@ class Channel:
         if state == "connecting":
             self.ended = None
             self.mode = ""
+            self.probed, self.peer = False, None
             self._mark()
         if state == "online" and prev != "online":
             self._mark()                           # the connection counts from here
             if self.link.kind == "telnet":         # the test port is always the own TinyBox
                 self.core.attach(self)
             elif self.incoming:                     # they called us: a terminal (CR46)
+                self.probed, self.peer = False, None
                 self.ended = None
                 self.mode = "terminal"
                 self.act_n += 1                     # the chip blinks
                 if not self.core.known_tinybox(self.target):
                     self.core.focus_channel(self.n)  # CR75: the GUI shows its terminal
             else:
+                self._probe()                       # CR76: who is there?
                 self._detect_task = asyncio.ensure_future(self._detect())
         if state == "disconnecting":
             self._disc_timer = asyncio.get_event_loop().call_later(
@@ -160,6 +165,9 @@ class Channel:
             self.core._on_line(line)               # the chat engine
             return
         line = line.rstrip()
+        if line.startswith("//") and self._tb_line(line):
+            self.core._touch()
+            return
         if self.mode == "" and line.startswith("Welcome to TinyBox"):
             if self.core.can_attach(self):
                 self.core.attach(self, line)    # the chat engine puts it into the terminal
@@ -183,6 +191,63 @@ class Channel:
             self.core.attach(self, handshake=True)
         else:
             self.to_terminal()
+
+    # --- CR76: who is there / CR78: TBClient to TBClient ------------------------------
+
+    def _probe(self) -> None:
+        line = peer_mod.probe_line()
+        self.probed = True
+        self.term_line("tx", line)
+        self.core.console.append(f"[{self.n}]> {line}")
+        self.link.send_line(line)
+
+    def _tb_line(self, line: str) -> bool:
+        """A // line on a channel that is no TinyBox in client mode (yet).
+        True = handled, not shown as text."""
+        word, _, rest = line[2:].partition(" ")
+        word = word.upper()
+        if word == "TB?" and self.incoming:          # a TBClient called us
+            self.link.send_line(peer_mod.answer_line())
+            self.core.console.append(f"[{self.n}]> {peer_mod.answer_line()}")
+            kind, _, args = rest.partition(" ")
+            if kind.upper() == "CLIENT" and self.peer is None:
+                self.peer = peer_mod.Peer(self, args)
+                self.peer.start()
+            return True
+        if word == "TB" and self.probed and not self.incoming:
+            kind, _, args = rest.partition(" ")
+            kind = kind.upper()
+            if kind == "BOX" and self.mode in ("", "terminal"):
+                self._found_box()
+                return True
+            if kind == "CLIENT" and self.peer is None:
+                if self._detect_task:
+                    self._detect_task.cancel()
+                if self.mode == "":
+                    self.mode = "terminal"
+                self.peer = peer_mod.Peer(self, args)
+                self.peer.start()
+                return True
+            return False
+        if self.peer is not None:
+            return self.peer.take(line)
+        return False
+
+    def _found_box(self) -> None:
+        """//TB BOX: a TinyBox. Client mode if no other TinyBox has it (CR45)."""
+        if self._detect_task:
+            self._detect_task.cancel()
+        if self.core.can_attach(self):
+            self.term_line("sys", f"*** {self.target}: TinyBox")
+            self.core.attach(self, handshake=True)
+        else:
+            self.mode = "terminal"
+            self.term_line("sys", f"*** {self.target}: TinyBox - terminal, the chat "
+                                  f"channel is busy with another one")
+            self.core.console.append(f"[{self.n}] *** {self.target}: TinyBox, terminal")
+
+    def ask_heard(self) -> bool:
+        return self.peer is not None and self.peer.ask_heard()
 
     def to_terminal(self) -> None:
         self.mode = "terminal"
@@ -219,4 +284,5 @@ class Channel:
                 "state": self.state, "reason": self.reason,
                 "state_age": round(now - self.state_at, 1), "ended": self.ended,
                 "mode": self.mode, "view": self.view, "chat": self.core.chan is self,
-                "act": self.act_n, "term_n": self.term_n, "outstanding": self.outstanding}
+                "act": self.act_n, "term_n": self.term_n, "outstanding": self.outstanding,
+                "peer": self.peer.summary() if self.peer is not None else None}   # CR78

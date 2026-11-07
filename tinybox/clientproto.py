@@ -28,6 +28,18 @@ right after the //OK, and nobody is told about a join: it never left. So the
 client does not have to guess where it is, and the mailbox command "C <n>" -
 chat text inside a board - stays off the air.
 
+Before all that (CR76): right after its connect a TBClient sends
+
+    //TB? CLIENT v=2026.11.07 caps=PROF,HEARD
+
+to whatever station it reached. The TinyBox answers with one line and changes
+nothing else (terminal users keep their prompts):
+
+    //TB BOX v=<release> call=<mailbox call>
+
+Another TBClient answers //TB CLIENT v=.. caps=.. (tbclient/peer.py), every other
+station ignores the line or calls it an unknown command.
+
 Other client commands:
     //BOARDS              -> //B <n> <board> <keep> <users> <description> ... //BEND
     //RESEND <a>-<b>      (inside a board) events a..b again, only to this client
@@ -74,6 +86,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from prcore import profile as pf
+from prcore.release import RELEASE
 
 from . import clientnews, clientsync, profiles
 from .addressing import base_call
@@ -115,7 +128,9 @@ def handle(s: Session, line: str) -> None:
     if not parts:
         return
     cmd = parts[0].upper()
-    if cmd == "CLIENT":
+    if cmd == "TB?":
+        tb_probe(s)
+    elif cmd == "CLIENT":
         _client(s, parts[1:])
     elif s.client is None:
         s.out("//ERR not a client session")
@@ -145,6 +160,13 @@ def handle(s: Session, line: str) -> None:
             (img.put if cmd == "IMGPUT" else img.get)(s, parts[1:])
     else:
         s.out(f"//ERR unknown {cmd}")
+
+
+def tb_probe(s: Session) -> None:
+    """CR76: //TB? [CLIENT v=.. caps=..] - a TBClient asks right after its connect
+    what it reached. Only the answer, the session stays as it is (terminal or
+    client mode); the client sends //CLIENT afterwards if it wants the chat."""
+    s.out(f"//TB BOX v={RELEASE} call={s.cfg.station.mailbox_call}")
 
 
 def _client(s: Session, parts: list[str]) -> None:

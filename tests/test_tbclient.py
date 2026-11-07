@@ -12,9 +12,11 @@ import time
 import unittest
 from pathlib import Path
 
+from tbclient import VERSION
 from tbclient import config as ccfg
 from tbclient import proto, radio
 from tbclient import channels as channels_mod
+from tbclient import peer as peer_mod
 from tbclient import core as core_mod
 from tbclient.core import ClientCore
 from tbclient.web import WebServer
@@ -93,6 +95,13 @@ class ConfigTests(unittest.TestCase):
             p = Path(d) / "c.conf"
             p.write_text("[station]\nmycall = OE3GAS\n" + text, encoding="utf-8")
             return ccfg.load(p)
+
+    def test_max_channels(self):
+        self.assertEqual(self.load("").max_channels, 5)
+        self.assertEqual(self.load("[tinybox]\nmax_channels = 10\n").max_channels, 10)
+        for bad in ("0", "11", "x"):
+            with self.assertRaises(ccfg.ConfigError):
+                self.load(f"[tinybox]\nmax_channels = {bad}\n")
 
     def test_cr70_new_and_old_names(self):
         cfg = self.load("[radio]\ninterface = kiss\n[kiss]\nport = 8201\n")
@@ -501,6 +510,9 @@ class FreeConnectTests(unittest.TestCase):
                 self.assertEqual(core.state, "offline")        # no chat channel
                 self.assertEqual(core.chan.n, 0)
                 self.assertFalse(any(b"//CLIENT" in d for d in bbs.got))
+                # CR76: only the one //TB? line went to it, nobody answered
+                self.assertTrue(any(d.startswith(b"//TB? CLIENT v=") for d in bbs.got))
+                self.assertIsNone(ch1.peer)
                 texts = [x for _, k, x in ch1.term if k == "rx"]
                 self.assertIn("#Stations heard", texts)          # not taken as a chat event
                 self.assertIn("//nonsense", texts)               # nor as a control line
@@ -526,7 +538,8 @@ class FreeConnectTests(unittest.TestCase):
                 rows = core.logbook.rows()
                 self.assertEqual([(r["call"], r["ended"]) for r in rows],
                                  [("OE3XBS-8", "user"), ("OE3NIX-1", "failed")])
-                self.assertEqual(rows[0]["tx"], 2)                    # "N" CR
+                probe = len(peer_mod.probe_line()) + 1                # CR76: //TB? ... CR
+                self.assertEqual(rows[0]["tx"], probe + 2)            # and "N" CR
                 self.assertGreater(rows[0]["rx"], 60)
                 self.assertIsNone(rows[1]["rx"])
                 self.assertEqual(len(core.logbook.rows(connected_only=True)), 1)
@@ -603,6 +616,7 @@ class FreeConnectTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as ta, tempfile.TemporaryDirectory() as tb:
                 a = ClientCore(client_cfg(ta, agw_port=port))
                 b = ClientCore(dataclasses.replace(client_cfg(tb, agw_port=port), mycall="OE3TEC"))
+                self.assertEqual(a.profiles.set("Gerhard", "JN88EP", ""), "")
                 tasks = [asyncio.create_task(a.run()), asyncio.create_task(b.run())]
                 await asyncio.wait_for(a.port.agw_up.wait(), 5)
                 await asyncio.wait_for(b.port.agw_up.wait(), 5)
@@ -613,6 +627,20 @@ class FreeConnectTests(unittest.TestCase):
                 ca = a.channels[1]
                 self.assertEqual((ca.target, ca.mode), ("OE3TEC", "terminal"))
                 self.assertEqual(a.snapshot()["focus"], {"n": 1, "seq": 1})   # CR75
+                # CR76/CR78: two TBClients know each other, the profile goes across
+                cb = b.channels[1]
+                await until(lambda: ca.peer is not None and cb.peer is not None)
+                self.assertEqual((ca.peer.version, cb.peer.version), (VERSION, VERSION))
+                self.assertEqual(cb.mode, "terminal")
+                await until(lambda: cb.peer.prof is not None)
+                self.assertEqual(cb.peer.prof["name"], "Gerhard")
+                self.assertEqual(cb.summary(0)["peer"]["prof"]["loc"], "JN88EP")
+                self.assertFalse(any(x.startswith("//") for _, k, x in ca.term if k == "rx"))
+                self.assertFalse(any(x.startswith("//") for _, k, x in cb.term if k == "rx"))
+                a.heard_at["OE1XAR-1"] = time.time() - 300
+                self.assertTrue(b.peer_heard(1))
+                await until(lambda: cb.peer.heard is not None)
+                self.assertIn(("OE1XAR-1", 5), cb.peer.heard)
                 self.assertTrue(b.send_raw("Servus", ch=1))
                 await until(lambda: any(x == "Servus" for _, k, x in ca.term if k == "rx"))
                 b.disconnect(1)

@@ -534,6 +534,14 @@ Eigener Client mit Zusatzfunktionen, die es nur mit der TinyBox gibt. Getrennt v
 
 ### 12.2 Handshake (umgesetzt für CHAT und UI)
 
+- **Kennung zuerst (CR76, 07.11.2026):** Gleich nach jedem ausgehenden Connect (nicht Telnet)
+  sendet der Client an jede Station `//TB? CLIENT v=<Version> caps=PROF,HEARD`. Eine TinyBox
+  antwortet `//TB BOX v=<RELEASE> call=<Mailbox>` und ändert sonst nichts (Prompts und
+  Profilfragen bleiben); ein anderer TBClient antwortet `//TB CLIENT v=… caps=…` (CR78);
+  fremde BBSen/Nodes ignorieren die Zeile oder melden „unknown command“. Erst auf `//TB BOX`
+  folgt `//CLIENT` – nur, wenn kein anderer Kanal schon eine TinyBox im Client-Modus hat
+  (CR45 bleibt: eine TinyBox mit vollen Funktionen). Ältere TinyBoxen ohne `//TB?` erkennt der
+  Client weiter am Welcome-Text. Eine TinyBox ruft nie selbst einen Client an.
 - Der Client sendet nach dem Login `//CLIENT TB1 caps=CHAT,UI,SYNC,Z sym=/-` (`SYNC` und `Z` für die Offline-Mailbox, 12.8).
 - Die TinyBox antwortet `//OK TB1 caps=…` mit dem gemeinsamen Funktionsumfang.
 - Die TinyBox merkt sich je Sitzung, ob ein Client angemeldet ist.

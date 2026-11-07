@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 
+from prcore.release import RELEASE
 from tinybox import clientnews
 from tinybox.session import Session, State
 from tests.test_chat import chat_app
@@ -38,6 +39,26 @@ class ClientProtoTests(unittest.TestCase):
         type_lines(s, "//CLIENT TB1 caps=CHAT,UI sym=xx")
         self.assertIn("//OK TB1 caps=CHAT,UI", t.take())
         self.assertEqual(s.client.symbol, "")
+
+    def test_tb_probe_answers_and_changes_nothing(self):
+        """CR76: //TB? gets one line, the session stays a terminal session."""
+        s, t = radio_login(self.app, "OE3ABC")
+        type_lines(s, "//TB? CLIENT v=2026.11.07 caps=PROF,HEARD")
+        out = t.take()
+        self.assertIn(f"//TB BOX v={RELEASE} call={self.app.cfg.station.mailbox_call}", out)
+        self.assertIsNone(s.client)
+        self.assertEqual(s.state, State.COMMAND)
+
+    def test_tb_probe_keeps_profile_questions(self):
+        """CR76: //TB? while the profile questions are up: answered, asked again."""
+        s, t = radio_login(self.app, "OE3ABC")
+        s._ask_fields, s._ask_answers = ["name"], {}
+        s._ask_next()
+        t.take()
+        type_lines(s, "//TB?")
+        out = t.take()
+        self.assertIn("//TB BOX", out)
+        self.assertEqual(s.state, State.PROFILE)
 
     def test_wrong_proto_and_not_client(self):
         s, t = login(self.app, "OE3ABC")

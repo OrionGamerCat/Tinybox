@@ -1,0 +1,3 @@
+- max_channels in tbclient.conf: 1-10 Verbindungen (Std. 5).
+- Nach Connect: //TB? erkennt TinyBox oder anderen TBClient.
+- Client zu Client: Profil, Entfernung, Heard-Liste, Version.

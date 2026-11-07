@@ -12,6 +12,7 @@ locator      =                 # your locator for the ADIF export of the connect
 call         = OE3GAS-1        # your TinyBox (mailbox); other stations: "Connect to" in the top bar
 ui           = auto            # chat events as UI frames: auto = if the TinyBox is heard directly
 auto_connect = no              # connect when the client starts
+max_channels = 5               # connections at once, 1 ... 10 (incoming ones included)
 telnet_host  = 127.0.0.1       # only with interface = telnet
 telnet_port  = 6300
 # axudp      = 127.0.0.1:10093 # PLANUNG 25: TinyBox on this PC, one transceiver - the home

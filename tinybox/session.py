@@ -313,6 +313,12 @@ class Session:
                 log.info("< %s", line)
         started = time.monotonic()
         try:
+            if self.state == State.PROFILE and line.strip().upper().startswith("//TB?"):
+                # CR76: a TBClient asks what it reached - answer, the question stays
+                from . import clientproto  # local import avoids a cycle
+                clientproto.tb_probe(self)
+                self._ask_next()
+                return
             if self.state == State.PROFILE and line.lstrip().startswith("//"):
                 # a TinyBox client announces itself (//CLIENT) while the terminal
                 # questions are up: they are over, the client has its own form

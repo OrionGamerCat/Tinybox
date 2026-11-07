@@ -14,6 +14,7 @@ API:
   POST /api/connect {"target": "CALL", "ch": n} (both optional, CR42/CR45)
   POST /api/disconnect {"ch": n} | /api/leave | /api/channel/close {"ch": n}
   POST /api/term   {"text": "...", "ch": n}   a raw line from the terminal view (CR43)
+  POST /api/peer/heard {"ch": n}             CR78: ask the TBClient there whom it hears
   POST /api/ui     {"dest": "CQ", "via": "OE3XBS-8,WIDE2-1", "text": "..."}   one UI frame
                    from the monitor (CR66) -> {"ok": true} or {"ok": false, "error": "..."}
   POST /api/join   {"board": n}
@@ -212,6 +213,9 @@ class WebServer:
             elif path == "/api/term":              # CR43: a raw line from the terminal
                 ch = data.get("ch")
                 ok = core.send_raw(str(data.get("text", "")), ch if isinstance(ch, int) else None)
+            elif path == "/api/peer/heard":        # CR78: {"ch": n} - whom it hears
+                ch = data.get("ch")
+                ok = core.peer_heard(ch if isinstance(ch, int) else 0)
             elif path == "/api/say":
                 ok = core.say(str(data.get("text", "")))
             elif path == "/api/react":

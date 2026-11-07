@@ -17,6 +17,9 @@ class ConfigError(Exception):
     pass
 
 
+MAX_CHANNELS_LIMIT = 10              # upper bound of [tinybox] max_channels
+
+
 @dataclass
 class Config:
     mycall: str = ""
@@ -25,6 +28,7 @@ class Config:
     link: str = "agw"                 # agw = Direwolf, kiss = kisshub (CR46), telnet = test port
     ui: str = "auto"                  # auto | yes | no  (chat events as UI frames)
     auto_connect: bool = False
+    max_channels: int = 5             # connections at once (1 ... 10)
     telnet_host: str = "127.0.0.1"
     telnet_port: int = 6300
     # PLANUNG 25: the home TinyBox over AXUDP (same PC), everything else over the radio
@@ -134,6 +138,12 @@ def load(path: str | Path) -> Config:
     cfg.link = pick([("radio", "interface"), ("tinybox", "link")], cfg.link).lower()
     cfg.ui = get("tinybox", "ui", cfg.ui).lower()
     cfg.auto_connect = get("tinybox", "auto_connect", "no").lower() in ("yes", "true", "1", "on")
+    try:
+        cfg.max_channels = int(get("tinybox", "max_channels", str(cfg.max_channels)))
+    except ValueError:
+        raise ConfigError("[tinybox] max_channels must be a number 1 ... 10") from None
+    if not 1 <= cfg.max_channels <= MAX_CHANNELS_LIMIT:
+        raise ConfigError(f"[tinybox] max_channels must be 1 ... {MAX_CHANNELS_LIMIT}")
     cfg.telnet_host = get("tinybox", "telnet_host", cfg.telnet_host)
     cfg.telnet_port = int(get("tinybox", "telnet_port", str(cfg.telnet_port)))
     if has("tinybox", "axudp"):                                  # PLANUNG 25

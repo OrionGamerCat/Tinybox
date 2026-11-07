@@ -1938,11 +1938,11 @@ function initMail() {
 }
 
 // ---------------------------------------------------------------- channels (CR45)
-// Up to 5 connections, one window each, shown one at a time; channel 0 is the
+// Up to max_ch (tbclient.conf, 1 ... 10) connections, one window each, shown one at a time; channel 0 is the
 // monitor. The top bar always shows the active channel; a chip blinks when
 // something came in behind the scenes, red when a connection went away there.
 let activeCh = 1;
-try { activeCh = Math.max(0, Math.min(5, parseInt(localStorage.getItem("tbc-ch") || "1", 10) || 0)); } catch (e) { /* ok */ }
+try { activeCh = Math.max(0, Math.min(10, parseInt(localStorage.getItem("tbc-ch") || "1", 10) || 0)); } catch (e) { /* ok */ }
 let pollCtl = null;           // aborts the waiting long poll when the channel changes
 const seenAct = {}, seenEnd = {};
 let manualTerm = false;       // the terminal of the TinyBox, opened by hand
@@ -1984,7 +1984,7 @@ function baseView() {
 const backView = () => (manualTerm && curCh().chat ? "term" : baseView());
 
 function switchCh(n) {
-  if (n < 0 || n > (S ? S.max_ch : 5)) return;
+  if (n < 0 || n > (S ? S.max_ch : 10)) return;
   if (n === activeCh) {                            // CR58: already this channel, but maybe
     if (view !== backView()) setView(backView());  // the mailbox is shown: back to the channel
     if (S) render();
@@ -2002,7 +2002,8 @@ function switchCh(n) {
 
 function newChannel() {
   const used = new Set((S.channels || []).map((c) => c.n));
-  const n = [1, 2, 3, 4, 5].find((x) => !used.has(x));
+  let n = 0;
+  for (let x = 1; x <= (S.max_ch || 5) && !n; x++) if (!used.has(x)) n = x;
   if (n) { switchCh(n); setTimeout(() => $("to-call").focus(), 0); }
 }
 
@@ -2029,7 +2030,7 @@ function renderStrip() {
     const dot = el("span", "dot " + (c.ended && c.state === "offline" && c.ended.kind === "failed" ? "failed" : c.state));
     b.append(el("span", "chn", String(c.n)), dot, el("span", "", c.target || "new"));
     if (c.chat && c.state !== "offline") b.append(el("span", "chtag", "chat"));
-    b.title = `Channel ${c.n} (Alt+${c.n})` + (c.target ? `: ${c.target}, ${c.state}` : "");
+    b.title = `Channel ${c.n}` + (c.n < 10 ? ` (Alt+${c.n})` : "") + (c.target ? `: ${c.target}, ${c.state}` : "");
     b.onclick = () => switchCh(c.n);
     if (c.state === "offline" && !c.virtual && chans.length > 1) {
       const x = el("span", "chx", "✕");
@@ -2131,7 +2132,7 @@ function topStatus() {
   }
   if (c.state === "disconnecting") return "disconnecting…";
   if (c.state === "online") {
-    if (c.mode === "terminal") return "connected · terminal";
+    if (c.mode === "terminal") return c.peer ? `connected · TBClient ${c.peer.v}` : "connected · terminal";
     if (!c.chat || c.mode !== "tinybox") return "connected";
     return (S.board ? `${S.board.name} · ${S.members.length} here` : "connected")
       + (c.link === "axudp" ? " · AXUDP" : S.ui ? " · UI" : " · I-frames");
@@ -2242,6 +2243,7 @@ function renderTerm() {
       + (c.chat ? " (TinyBox: lines go to it as typed)" : "")
     : c.target ? `${c.target} - not connected` : "not connected - enter a call in the top bar";
   $("term-close").classList.toggle("hidden", !c.chat || mon);
+  renderPeer(c, mon);
   $("term-form").classList.toggle("hidden", mon);
   $("mon-tools").classList.toggle("hidden", !mon);
   $("ui-form").classList.toggle("hidden", !mon || !uiOpen);
@@ -2262,6 +2264,24 @@ function renderTerm() {
   termShown = Math.max(termShown, S.term_n || 0);
   while (out.childNodes.length > 600) out.firstChild.remove();
   if (atBottom) out.scrollTop = out.scrollHeight;
+}
+
+// CR78: the other side is a TBClient - version, profile, "Heard there"
+function renderPeer(c, mon) {
+  const p = !mon && c.state === "online" ? c.peer : null;
+  $("peer-info").classList.toggle("hidden", !p);
+  $("peer-heard").classList.toggle("hidden", !p || !p.caps.includes("HEARD"));
+  if (!p) return;
+  const pr = p.prof || {};
+  const parts = [`TBClient ${p.v || "?"}` + (p.newer ? " (newer)" : "")];
+  if (pr.name) parts.push(pr.name);
+  if (pr.loc) parts.push(pr.loc + (pr.km !== undefined ? ` · ${pr.km} km ${compass(pr.deg)}` : ""));
+  if (pr.home) parts.push("@" + pr.home);
+  $("peer-info").textContent = parts.join(" · ");
+}
+
+async function peerHeard() {
+  if (activeCh) await api("peer/heard", { ch: activeCh });
 }
 
 // ---------------------------------------------------------------- monitor (CR50)
@@ -2561,14 +2581,15 @@ async function start() {
   $("term-form").onsubmit = termSend;
   $("term-input").addEventListener("keydown", termKey);
   $("term-close").onclick = () => { manualTerm = false; setView("chat"); };
-  document.addEventListener("keydown", (e) => {               // CR45: Alt+0 ... Alt+5
-    if (e.altKey && !e.ctrlKey && !e.metaKey && /^[0-5]$/.test(e.key)) {
+  document.addEventListener("keydown", (e) => {               // CR45: Alt+0 ... Alt+9
+    if (e.altKey && !e.ctrlKey && !e.metaKey && /^[0-9]$/.test(e.key)) {
       e.preventDefault();
       const n = Number(e.key);
-      if (n === 0 || (S && (S.channels.some((c) => c.n === n) || S.channels.length < S.max_ch))) switchCh(n);
+      if (n === 0 || (S && n <= S.max_ch && (S.channels.some((c) => c.n === n) || S.channels.length < S.max_ch))) switchCh(n);
     }
   });
   $("btn-term").onclick = openTerm;
+  $("peer-heard").onclick = peerHeard;                         // CR78
   const monRedraw = () => { monDirty = true; if (S && activeCh === 0) { renderMonitor(); $("term-out").scrollTop = $("term-out").scrollHeight; } };
   $("mon-ui").onclick = uiToggle;                              // CR66
   $("ui-form").addEventListener("submit", uiSend);

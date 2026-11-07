@@ -2150,3 +2150,70 @@ werden – außer es handelt sich um eine TinyBox.
 - Gilt für AGW, KISS und AXUDP.
 - Test: `tests/test_tbclient.py` (`test_incoming_connect_over_agw`, um CR75 erweitert).
 
+## CR76 – Kennung `//TB?` nach dem Connect: TinyBox, TBClient oder fremde Station (✅ 07.11.2026)
+
+### Erfassung (OE3GAS, 07.11.2026)
+
+Der Client soll gleich nach dem Connect eine Kennung schicken, auf die eine TinyBox reagiert,
+eine andere BBS oder ein anderer Connect-Partner aber nicht. Eine TinyBox ruft nie von sich aus
+einen Client an – ein SID-Austausch wie beim Forwarding ist daher nicht nötig. Zwei Clients
+sollen sich ebenfalls erkennen (CR78).
+
+### Umsetzung (Client 2026.11.07.2, TinyBox)
+
+- Client: nach jedem **ausgehenden** Connect (Funk und AXUDP, nicht Telnet) eine Zeile
+  `//TB? CLIENT v=<Version> caps=PROF,HEARD` (im Terminal als gesendete Zeile sichtbar).
+- TinyBox (`clientproto.tb_probe()`): Antwort `//TB BOX v=<RELEASE> call=<Mailbox>`, sonst
+  nichts – die Sitzung bleibt, wie sie ist. Kommt `//TB?` während der Profilfragen (CR73), wird
+  die Frage danach noch einmal gestellt, statt sie zu beenden.
+- Client auf `//TB BOX`: `//CLIENT`-Handshake, sofern kein anderer Kanal eine TinyBox im
+  Client-Modus hat (**CR45 bleibt**); sonst bleibt der Kanal Terminal mit Hinweis. Auch eine
+  späte Antwort (nach den 6 s Erkennungszeit, langsamer Weg) wird noch genommen.
+- Client auf `//TB CLIENT …`: der Kanal ist Terminal mit Peer-Funktionen (CR78).
+- Fremde Stationen: sehen die eine Zeile, antworten evtl. „unknown command“; der Kanal wird wie
+  bisher nach 6 s Terminal. Ältere TinyBoxen ohne `//TB?` erkennt der Client weiter an
+  „Welcome to TinyBox“.
+- Tests: `tests/test_clientproto.py` (`test_tb_probe_*`), `tests/test_tbclient.py`
+  (`test_foreign_bbs_terminal_and_states`, `test_incoming_connect_over_agw`).
+
+## CR77 – Mehrere TinyBoxen gleichzeitig im Client-Modus (abgelehnt, 07.11.2026)
+
+Vorschlag: Chat-Zustand je Kanal, damit mehrere TinyBoxen mit vollen Funktionen verbunden sein
+können. **Entscheidung OE3GAS:** nein – die Grenze aus CR45 bleibt: eine TinyBox mit vollen
+Funktionen, jede weitere als Terminal.
+
+## CR78 – TBClient zu TBClient: Profile, Heard-Liste, Version (✅ Stufe 1, 07.11.2026)
+
+### Erfassung (OE3GAS, 07.11.2026)
+
+Wenn sich zwei Clients connecten, sollen sie sich erkennen und gemeinsame Funktionen
+freischalten.
+
+### Umsetzung Stufe 1 (Client 2026.11.07.2, `tbclient/peer.py`)
+
+- Erkennung über CR76: Der Anrufer schickt `//TB? CLIENT v=… caps=…`, der Angerufene antwortet
+  `//TB CLIENT v=… caps=PROF,HEARD`. Beide Kanäle bleiben Terminal; Steuerzeilen (`//…`) des
+  Gegenübers erscheinen nicht als Text, sondern als `***`-Hinweise.
+- **Profil:** Jede Seite schickt einmal `//PROF loc=.. home=.. name=..` (nur ein selbst
+  eingetragenes Profil). Anzeige in der Terminal-Leiste: Name, Locator, Entfernung und Richtung
+  aus den Locatoren, Home-BBS; das Profil kommt auch in den Profil-Speicher (wie `//WI`).
+- **Heard-Liste:** Knopf „Heard there“ → `//HEARD?`, Antwort
+  `//HEARD <call>=<min> …` (bis 10 Stationen, `//HEARD -` = niemand); im Terminal als Zeile.
+- **Version:** Die Leiste zeigt „TBClient <Version>“, die Kopfzeile „connected · TBClient …“;
+  ist der andere Client neuer, steht ein Hinweis im Terminal.
+- API: `POST /api/peer/heard {"ch": n}`; Snapshot: `channels[].peer`.
+
+### Später (eigene Stufen)
+
+- Linkqualität beider Seiten (Retries/REJ, Balken wie `%Q`).
+- Chat-Ansicht statt Terminal (Sprechblasen, Emoticons, Reaktionen).
+- Bilder direkt (CR12-Verfahren, binär).
+- Direkte Nachricht/Datei mit LZHUF.
+- Uhrzeitabgleich.
+
+## Kanal-Maximum in `tbclient.conf` (✅ 07.11.2026, zu CR45)
+
+`[tinybox] max_channels` (Standard 5, erlaubt 1 … 10) ersetzt die feste Grenze 5 aus CR45.
+Eingehende Connects und der Kanal des Mail-Abgleichs zählen mit. Alt+1 … Alt+9 schalten um,
+Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
+

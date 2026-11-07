@@ -10,6 +10,14 @@ neu ist, steht kurz in tbclient/news/<Version>.txt - das geht als
 Bulletin in die Rubrik TBNEWS.)
 
 Zuletzt dazugekommen
+- Kennung nach dem Connect (CR76): der Client sendet //TB?. Eine TinyBox
+  antwortet //TB BOX (dann der Handshake, wenn der Chat-Kanal frei ist),
+  ein anderer TBClient //TB CLIENT, alle anderen Stationen nichts.
+- Client zu Client (CR78): zwei TBClients erkennen sich; Profil (Name,
+  Locator, Entfernung/Richtung, Home-BBS) und Version in der Terminal-
+  Leiste, Knopf "Heard there" fragt, wen der andere hoert.
+- max_channels in tbclient.conf: 1 bis 10 Verbindungen gleichzeitig
+  (Standard 5), Alt+1 ... Alt+9.
 - Eingehender Connect (CR75): ruft uns eine Station an, schaltet die Web-GUI
   gleich auf das Terminal dieses Kanals. Ausnahme: eine bekannte TinyBox
   (die eigene oder eine schon einmal als TinyBox erkannte) - dann bleibt die
@@ -71,9 +79,9 @@ Zuletzt dazugekommen
 - Eingehende Connects: ruft eine Station uns an, nimmt sie der erste freie
   Kanal als Terminal (sonst bekommt sie DM bzw. wird getrennt). Gilt fuer
   KISS, AGW und AXUDP; die GUI schaltet gleich dorthin (CR75).
-- Multi-Connect (CR45): bis zu 5 Verbindungen gleichzeitig ueber Funk, jede
+- Multi-Connect (CR45): bis zu max_channels (Std. 5, max. 10) Verbindungen ueber Funk, jede
   in einem eigenen Kanal. Die Kanalleiste unter der Titelleiste schaltet um
-  (Klick oder Alt+1 ... Alt+5); "+ new" oeffnet einen freien Kanal, das
+  (Klick oder Alt+1 ... Alt+9); "+ new" oeffnet einen freien Kanal, das
   Kreuz schliesst einen getrennten. Kanal 0 = Monitor (alles Gehoerte,
   dazu die Frames, die je Kanal noch bei Direwolf warten). Ein Chip blinkt,
   wenn im Hintergrund etwas hereinkam, rot, wenn dort eine Verbindung

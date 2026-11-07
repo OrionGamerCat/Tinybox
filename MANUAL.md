@@ -143,6 +143,7 @@ locator = JN88bn
 call         = OE3GAS-1        ; die eigene TinyBox (Mailbox)
 ui           = auto            ; auto | yes | no – Chat-Ereignisse als UI-Frames
 auto_connect = no
+max_channels = 5               ; gleichzeitige Verbindungen, 1 … 10 (eingehende mitgezählt)
 telnet_host  = 127.0.0.1       ; nur für interface = telnet
 telnet_port  = 6300
 

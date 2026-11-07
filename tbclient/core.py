@@ -21,7 +21,7 @@ from . import VERSION, proto
 from . import target as tgt
 from .config import CALL_RE, Config
 from .images import Images, ImageStore
-from .channels import MAX_CHANNELS, TERM_SNAPSHOT, Channel
+from .channels import TERM_SNAPSHOT, Channel
 from .kisslink import AxudpPort, KissLink, KissPort
 from .links import AgwLink, AgwPort, TelnetLink
 from .logbook import Logbook
@@ -395,7 +395,7 @@ class ClientCore:
         for n in sorted(self.channels):
             if self.channels[n].state == "offline":
                 return n
-        return next((n for n in range(1, MAX_CHANNELS + 1) if n not in self.channels), None)
+        return next((n for n in range(1, self.cfg.max_channels + 1) if n not in self.channels), None)
 
     async def connect(self, target: str | None = None, ch: int | None = None,
                       auto: bool = False) -> bool:
@@ -406,7 +406,7 @@ class ClientCore:
             ch, target = 1, self.home
         if ch is None:
             ch = self.free_channel()
-        if ch is None or not 1 <= ch <= MAX_CHANNELS:
+        if ch is None or not 1 <= ch <= self.cfg.max_channels:
             return False
         chan = self.channels.get(ch)
         if chan is not None and chan.state != "offline":
@@ -439,6 +439,11 @@ class ClientCore:
         chan = self.chan if ch is None else self.channels.get(ch)
         if chan is not None:
             chan.disconnect()
+
+    def peer_heard(self, ch: int) -> bool:
+        """CR78: ask the TBClient in channel ch whom it hears."""
+        chan = self.channels.get(ch)
+        return chan is not None and chan.ask_heard()
 
     def send_raw(self, text: str, ch: int | None = None) -> bool:
         chan = self.chan if ch is None else self.channels.get(ch)
@@ -1117,7 +1122,7 @@ class ClientCore:
             "freq_last": self.settings.get("freq", ""),
             # CR45: the channels, the chat channel (0 = none) and the shown one
             "channels": [c.summary(now) for _, c in sorted(self.channels.items())],
-            "chat_ch": self.chan.n, "max_ch": MAX_CHANNELS, "monitor_n": self.monitor_n,
+            "chat_ch": self.chan.n, "max_ch": self.cfg.max_channels, "monitor_n": self.monitor_n,
             "focus": self.focus,                                        # CR75
             "radio": self.radio_state(),                                # CR46
             "axudp": self.udp.radio_state() if self.udp is not None else None,   # PLANUNG 25

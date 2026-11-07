@@ -210,6 +210,7 @@ input { font: inherit; color: var(--text); background: var(--surface); border: 1
 .term-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface);
   border-bottom: 1px solid var(--line); }
 .term-bar .sp { flex: 1; }
+.peer-info { color: var(--accent); }          /* CR78: the other side is a TBClient */
 .term-split { flex: 1; display: flex; min-height: 0; }   /* monitor + APRS lens (CR55) */
 .term-out { flex: 1; min-width: 0; margin: 0; overflow: auto; padding: 8px 10px; background: #0c1218; color: #d3e6d3;
   font: 13px/1.45 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
