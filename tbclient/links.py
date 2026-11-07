@@ -21,6 +21,7 @@ from typing import Callable
 
 from prcore.termcolor import OK
 
+from prcore import linkq
 from prcore.agw import PID_NO_L3, Frame, read_frame, via_data
 
 from . import radio
@@ -122,6 +123,11 @@ class BaseLink:
         self.rx_bytes = self.tx_bytes = 0
         self.splitter = LineSplitter(self._line)
 
+    async def counters(self) -> dict | None:
+        """CR78: AX.25 counters of this connection (names as prcore/linkq.py), None =
+        not available (telnet, Direwolf without the TinyBox fork)."""
+        return None
+
     def drop(self, reason: str) -> None:
         """Offline now, without waiting for the other side (a disconnect that
         never got an answer). A late answer is then ignored."""
@@ -141,6 +147,8 @@ class AgwPort:
         self._writer: asyncio.StreamWriter | None = None
         self.agw_up = asyncio.Event()
         self.links: dict[str, "AgwLink"] = {}      # remote call -> its connection
+        # CR78: Direwolf answers 'Q' (TinyBox fork)? None = not known yet
+        self.q_supported: bool | None = None
 
     def send(self, kind: str, call_from: str = "", call_to: str = "",
              data: bytes = b"", pid: int = 0) -> None:
@@ -169,6 +177,7 @@ class AgwPort:
             self.send("R")
             self.send("X", self.cfg.mycall)
             self.send("k")
+            self.q_supported = None                 # maybe another Direwolf now
             self.agw_up.set()
             try:
                 while True:
@@ -223,6 +232,8 @@ class AgwLink(BaseLink):
         self.connecting = False
         self._outstanding = 0
         self._y_reply = asyncio.Event()
+        self._q: dict | None = None
+        self._q_reply = asyncio.Event()
 
     def _set(self, state: str, reason: str = "") -> None:
         if state == "offline" and self.port.links.get(self.target) is self:
@@ -239,6 +250,10 @@ class AgwLink(BaseLink):
         elif kind == "Y" and len(data) >= 4:
             self._outstanding = struct.unpack("<I", data[:4])[0]
             self._y_reply.set()
+        elif kind == "Q":                         # CR78: TinyBox Direwolf fork
+            self.port.q_supported = True
+            self._q = linkq.parse(data.decode("ascii", "replace"))
+            self._q_reply.set()
         elif kind == "d":
             self.connecting = False
             if self.active:
@@ -279,6 +294,21 @@ class AgwLink(BaseLink):
         except asyncio.TimeoutError:
             return 0
         return self._outstanding
+
+    async def counters(self) -> dict | None:
+        """AGW 'Q' - only the TinyBox fork of Direwolf answers (direwolf-tinybox)."""
+        if self.port.q_supported is False or not self.online:
+            return None
+        self._q_reply.clear()
+        self.port.send("Q", self.cfg.mycall, self.target)
+        try:
+            await asyncio.wait_for(self._q_reply.wait(), 3)
+        except asyncio.TimeoutError:
+            if self.port.q_supported is None:
+                self.port.q_supported = False
+                log.info("Direwolf does not answer 'Q' (no TinyBox fork): no link quality")
+            return None
+        return self._q
 
     def disconnect(self) -> None:
         """Direwolf answers with 'd' once the link is down (DISC/UA, or after

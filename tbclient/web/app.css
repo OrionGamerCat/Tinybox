@@ -217,6 +217,14 @@ input { font: inherit; color: var(--text); background: var(--surface); border: 1
 .peer-head .ph-call { font: 600 16px ui-monospace, Consolas, monospace; }
 .peer-head .ph-who { color: var(--text); }
 .peer-head .ph-heard { color: var(--muted); margin-top: 2px; }
+.peer-head .ph-q { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.peer-head .ph-q.tap { cursor: pointer; }
+.peer-head .ph-qd { flex-basis: 100%; margin-top: 2px; }
+/* the column: card, bubbles and input narrow and centred (wide screens) */
+.termview.peer .peer-head, .termview.peer .term-in { padding-left: max(14px, calc((100% - 760px) / 2));
+  padding-right: max(14px, calc((100% - 760px) / 2)); }
+.termview.peer .term-out { padding-left: max(14px, calc((100% - 760px) / 2));
+  padding-right: max(14px, calc((100% - 760px) / 2)); }
 .termview.peer .term-out { background: var(--bg); color: var(--text); font: inherit; white-space: normal;
   display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; }
 .termview.peer .pb { max-width: 75%; padding: 6px 10px 4px; border-radius: 12px; background: var(--surface);

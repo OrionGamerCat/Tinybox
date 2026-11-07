@@ -1984,7 +1984,7 @@ function baseView() {
   if (activeCh === 0) return "term";
   const c = curCh();
   if (c.chat) return "chat";
-  return c.peer && c.state === "online" && !peerRaw ? "peer" : "term";   // CR78
+  return c.peer && !peerRaw ? "peer" : "term";   // CR78 (also after the disconnect)
 }
 const backView = () => (manualTerm && curCh().chat ? "term" : baseView());
 
@@ -2287,10 +2287,11 @@ function renderTerm() {
 
 // CR78: the other side is a TBClient - version, profile, "Heard there"
 function renderPeer(c, mon) {
-  const p = !mon && c.state === "online" ? c.peer : null;
-  const pv = view === "peer";
+  const p = !mon ? c.peer : null;                // kept after the disconnect (history)
+  const pv = view === "peer", on = c.state === "online";
   $("peer-info").classList.toggle("hidden", !p || pv);
-  $("peer-heard").classList.toggle("hidden", !p || !p.caps.includes("HEARD"));
+  $("peer-heard").classList.toggle("hidden", !p || !on || !p.caps.includes("HEARD"));
+  $("peer-clear").classList.toggle("hidden", !p || !p.hist || !pv);
   $("peer-raw").classList.toggle("hidden", !p);
   $("peer-raw").textContent = pv ? "Terminal" : "TBClient view";
   $("peer-head").classList.toggle("hidden", !p || !pv);
@@ -2317,7 +2318,8 @@ function renderPeerHead(c, p) {
                pr.home && "home BBS " + pr.home].filter(Boolean).join(" · ");
   info.append(el("div", "ph-who", who || "no profile sent"));
   info.append(el("div", "ph-ver muted small", `TBClient ${p.v || "?"}` + (p.newer ? " - newer than yours" : "")
-    + ` · since ${hhmm(Math.round(Date.now() / 1000 - c.state_age))}`));
+    + (c.state === "online" ? ` · since ${hhmm(Math.round(Date.now() / 1000 - c.state_age))}` : " · not connected")));
+  info.append(peerQuality(p.q, c));
   if (p.heard) {
     info.append(el("div", "ph-heard small", p.heard.length
       ? "Hears: " + p.heard.map(([call, m]) => `${call} (${m ? m + " min" : "now"})`).join(", ")
@@ -2326,8 +2328,65 @@ function renderPeerHead(c, p) {
   head.replaceChildren(avatar(c.target, "", false), info);
 }
 
+// 5 bars, 0 = one red bar, null = no result yet (grey)
+function barsEl(n, big) {
+  const known = n !== null && n !== undefined;
+  const box = el("span", "qbars" + (big ? " big" : "") + (known ? ` q${n}` : " qnone"));
+  box.title = known ? `${QTEXT[n]} (${n}/5)` : "not enough frames yet";
+  for (let i = 1; i <= 5; i++) box.append(el("i", known && (i <= n || (n === 0 && i === 1)) ? "on" : ""));
+  return box;
+}
+
+/* CR78: link quality from the own counters (Direwolf fork 'Q' or the own AX.25):
+ * -> = our frames to them, <- = theirs to us; a tap shows the numbers. */
+let peerQOpen = false;
+function peerQuality(q, c) {
+  const row = el("div", "ph-q small");
+  if (c.link === "axudp") { row.textContent = "AXUDP - no radio path, no link quality"; return row; }
+  if (!q || q.none) {
+    row.textContent = q && q.none ? "no link data (Direwolf without the TinyBox fork)" : "link quality: measuring ...";
+    return row;
+  }
+  if (q.bars === undefined) { row.textContent = "link quality: measuring ..."; return row; }
+  row.classList.add("tap");
+  row.title = "Tap: the numbers behind the bars";
+  row.onclick = () => { peerQOpen = !peerQOpen; render(); };
+  row.append(el("span", "", "→ "), barsEl(q.out.bars), el("span", "", ` ${c.target}   ← `), barsEl(q.in.bars));
+  if (peerQOpen) {
+    const f = (d) => d.loss === null ? `${d.frames} frames (too few)` : `${d.frames} frames, ${d.lost} again (${Math.round(d.loss * 10) / 10} %)`;
+    const det = el("div", "ph-qd muted");
+    det.append(el("div", "", "→ out: " + f(q.out)), el("div", "", "← in: " + f(q.in)),
+      el("div", "", `REJ received ${q.rej_rx}, sent ${q.rej_tx} · T1 timeouts ${q.t1} · SRT ${q.srt} s`
+        + (q.rate ? ` · ${q.rate} B/s` : "")));
+    row.append(det);
+  }
+  return row;
+}
+
+let peerChatKey = "";
+function bubble(kind, text, t) {
+  const b = el("div", "pb " + kind);
+  b.append(el("div", "pb-t", text || " "), el("div", "pb-time", hhmm(t)));
+  return b;
+}
+
 function renderPeerChat(lines) {
   const out = $("term-out");
+  const pc = S.peerchat;
+  if (pc) {                                     // the stored history (both sides know HIST)
+    const last = pc.msgs.length ? pc.msgs[pc.msgs.length - 1].id : 0;
+    const key = `${activeCh}:${pc.v}:${pc.msgs.length}:${last}`;
+    if (key === peerChatKey && termShown >= 0) return;
+    const first = termShown < 0 || !peerChatKey.startsWith(activeCh + ":");
+    const atBottom = out.scrollTop + out.clientHeight >= out.scrollHeight - 40;
+    peerChatKey = key;
+    termShown = S.term_n || 0;
+    out.replaceChildren(...pc.msgs.map((m) => m.dir === "note" ? el("div", "pb sys", m.text)
+      : bubble(m.dir, m.text, m.t)));
+    if (first || atBottom) out.scrollTop = out.scrollHeight;
+    return;
+  }
+  peerChatKey = "";
   if (termShown < 0 || S.term_n < termShown || (lines.length && lines[0][0] > termShown + 1)) {
     out.replaceChildren();
     termShown = lines.length ? lines[0][0] - 1 : 0;
@@ -2339,10 +2398,8 @@ function renderPeerChat(lines) {
     if (kind === "tx" && text.startsWith("//")) continue;          // protocol, not a message
     const key = activeCh + ":" + n;
     if (!peerSeen[key]) peerSeen[key] = now;
-    if (kind === "sys") { out.append(el("div", "pb sys", text.replace(/^\*\*\* /, ""))); continue; }
-    const b = el("div", "pb " + kind);
-    b.append(el("div", "pb-t", text || " "), el("div", "pb-time", hhmm(peerSeen[key])));
-    out.append(b);
+    if (kind === "sys") continue;                 // online, disconnected ...: top bar
+    out.append(bubble(kind, text, peerSeen[key]));
   }
   termShown = Math.max(termShown, S.term_n || 0);
   while (out.childNodes.length > 600) out.firstChild.remove();
@@ -2352,6 +2409,12 @@ function renderPeerChat(lines) {
 function peerToggle() {
   peerRaw = view === "peer";
   setView(baseView());
+}
+
+async function peerClear() {
+  if (!activeCh || !window.confirm(`Delete the chat history with ${curCh().target}? `
+      + "It is deleted on the other side too.")) return;
+  await api("peer/clear", { ch: activeCh });
 }
 
 async function peerHeard() {
@@ -2665,6 +2728,7 @@ async function start() {
   $("btn-term").onclick = openTerm;
   $("peer-heard").onclick = peerHeard;                         // CR78
   $("peer-raw").onclick = peerToggle;
+  $("peer-clear").onclick = peerClear;
   const monRedraw = () => { monDirty = true; if (S && activeCh === 0) { renderMonitor(); $("term-out").scrollTop = $("term-out").scrollHeight; } };
   $("mon-ui").onclick = uiToggle;                              // CR66
   $("ui-form").addEventListener("submit", uiSend);

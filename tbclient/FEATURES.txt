@@ -17,7 +17,10 @@ Zuletzt dazugekommen
   Locator, Entfernung/Richtung, Home-BBS) und Version in der Terminal-
   Leiste, Knopf "Heard there" fragt, wen der andere hoert. Eigene Ansicht
   "TBClient": Karte mit Profil, Entfernung und Version, die Zeilen als
-  Sprechblasen; "Terminal" zeigt die rohe Ansicht.
+  Sprechblasen; "Terminal" zeigt die rohe Ansicht. Linkqualitaet in
+  beide Richtungen (Direwolf-Fork 'Q' oder eigenes AX.25 ueber KISS).
+  Verlauf (100 Zeilen) in peerchat.db, beim Connect abgeglichen,
+  "Delete history" loescht auf beiden Seiten.
 - max_channels in tbclient.conf: 1 bis 10 Verbindungen gleichzeitig
   (Standard 5), Alt+1 ... Alt+9.
 - Eingehender Connect (CR75): ruft uns eine Station an, schaltet die Web-GUI

@@ -26,6 +26,7 @@ from .kisslink import AxudpPort, KissLink, KissPort
 from .links import AgwLink, AgwPort, TelnetLink
 from .logbook import Logbook
 from .mailstore import MailStore
+from .peerchat import PeerChat
 from .profiles import Profiles
 from .radio import RawFrame, aprs_symbol, guess_mod128, monitor_entry
 from .sync import Syncer
@@ -41,6 +42,7 @@ MAX_GAP = 32
 RECENT_MAX = 10           # CR42: targets remembered for the "Connect to" field
 MONITOR_MAX = 500         # CR45: frames kept for the monitor (channel 0)
 OUTSTANDING_SEC = 3       # CR45: how often the send queues of the channels are asked
+PEER_Q_SEC = 30           # CR78: how often the link counters of a TBClient channel are read
 SYMBOL_RE = re.compile(r"^[/\\0-9A-Z][!-~]$")
 UI_MAX_BYTES = 1024       # CR66: info field of a UI frame from the monitor
 UI_MAX_VIA = 8            # AX.25 allows 8 digipeaters
@@ -99,6 +101,11 @@ class ClientCore:
         self.aprs_stats = AprsStats(cfg.data_dir / "aprsstats.db", self.aprs_home)   # CR61
         # CR44: connection logbook
         self.logbook = Logbook(cfg.data_dir / "connlog.db")
+        try:                                      # CR78: chat history with other TBClients
+            self.peerchat: PeerChat | None = PeerChat(cfg.data_dir / "peerchat.db")
+        except Exception:
+            log.exception("peerchat.db: no chat history with other clients")
+            self.peerchat = None
         # the frequency is asked once per run of the client (the last one is offered)
         self.freq = ""
         self.freq_asked = False
@@ -439,6 +446,29 @@ class ClientCore:
         chan = self.chan if ch is None else self.channels.get(ch)
         if chan is not None:
             chan.disconnect()
+
+    def peer_clear(self, ch: int) -> bool:
+        """CR78: the button "Delete history" in the TBClient view."""
+        chan = self.channels.get(ch)
+        if chan is None or chan.peer is None or self.peerchat is None:
+            return False
+        chan.peer.clear_history()
+        return True
+
+    async def _poll_peer_quality(self) -> None:
+        """CR78: link counters of the channels with a TBClient (no lines on the air)."""
+        while True:
+            await asyncio.sleep(PEER_Q_SEC)
+            changed = False
+            for c in list(self.channels.values()):
+                if c.peer is not None and c.state == "online":
+                    try:
+                        c.peer.add_counters(await c.link.counters(), time.monotonic())
+                        changed = True
+                    except Exception:
+                        log.exception("link counters of channel %s", c.n)
+            if changed:
+                self._touch()
 
     def peer_heard(self, ch: int) -> bool:
         """CR78: ask the TBClient in channel ch whom it hears."""
@@ -1128,6 +1158,7 @@ class ClientCore:
             "axudp": self.udp.radio_state() if self.udp is not None else None,   # PLANUNG 25
             "ch": ch,
             "term": self._term_of(ch), "term_n": self._term_n_of(ch),
+            "peerchat": self._peerchat_of(ch),                          # CR78
             "client": self.handshake_done and bool(self.caps or self.boards),
             "ui": "UI" in self.caps,
             "boards": self.boards, "board": self.board,
@@ -1212,6 +1243,13 @@ class ClientCore:
         c = self.channels.get(ch) if ch is not None else self.chan
         return list(c.term)[-TERM_SNAPSHOT:] if c is not None else []
 
+    def _peerchat_of(self, ch: int | None) -> dict | None:
+        """The stored chat with the TBClient of the channel shown (CR78)."""
+        c = self.channels.get(ch) if ch else None
+        if c is None or c.peer is None or self.peerchat is None or not c.peer.hist:
+            return None
+        return {"v": self.peerchat.version, "msgs": self.peerchat.messages(c.peer.call)}
+
     def _term_n_of(self, ch: int | None) -> int:
         if ch == 0:
             return self.monitor_n
@@ -1226,10 +1264,12 @@ class ClientCore:
             await asyncio.Event().wait()     # telnet: nothing to keep open between sessions
             return
         poller = asyncio.ensure_future(self._poll_outstanding())
+        qpoll = asyncio.ensure_future(self._poll_peer_quality())
         udp = asyncio.ensure_future(self.udp.run()) if self.udp is not None else None
         try:
             await self.port.run()
         finally:
             poller.cancel()
+            qpoll.cancel()
             if udp is not None:
                 udp.cancel()

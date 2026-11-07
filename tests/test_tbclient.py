@@ -203,6 +203,8 @@ class FakeDirewolf:
                     self._air(me, raw_frame(ct, cf, 0x03, data))
                 elif kind == "Y":
                     self._put(me, "Y", cf, ct, struct.pack("<I", 0))
+                elif kind == "Q" and getattr(self, "q_line", None):    # TinyBox fork (CR78)
+                    self._put(me, "Q", cf, ct, self.q_line)
                 elif kind == "d":
                     other = self._owner(ct)
                     if other:

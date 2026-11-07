@@ -94,6 +94,8 @@ class Channel:
             return False
         text = text.replace("\r", " ").replace("\n", " ")[:250]
         self.term_line("tx", text)
+        if self.peer is not None and not text.startswith("//"):
+            self.peer.text("tx", text)                  # CR78: the chat history
         if self.core.chan is self:
             self.core._send(text)             # an image upload may hold lines back
         else:
@@ -180,6 +182,8 @@ class Channel:
             self.mode = "terminal"              # only one TinyBox in client mode (CR45)
         # CR43: not (yet) a TinyBox in client mode: every line goes to the terminal
         self.term_line("rx", line)
+        if self.peer is not None:
+            self.peer.text("rx", line)                  # CR78: the chat history
         if line:
             self.core.console.append(f"[{self.n}] {line}")
         self.core._touch()
@@ -298,4 +302,4 @@ class Channel:
                 "state_age": round(now - self.state_at, 1), "ended": self.ended,
                 "mode": self.mode, "view": self.view, "chat": self.core.chan is self,
                 "act": self.act_n, "term_n": self.term_n, "outstanding": self.outstanding,
-                "peer": self.peer.summary() if self.peer is not None else None}   # CR78
+                "peer": self.peer.summary(time.monotonic()) if self.peer is not None else None}

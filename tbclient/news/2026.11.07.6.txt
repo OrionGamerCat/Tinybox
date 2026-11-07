@@ -1,0 +1,4 @@
+- TBClient-Ansicht schmal und zentriert, ohne online/offline-Zeilen.
+- Linkqualitaet zum anderen TBClient (Direwolf-Fork oder KISS).
+- Chat-Verlauf mit dem anderen TBClient (100 Zeilen), Abgleich
+  beim Connect, Loeschen auf beiden Seiten.

@@ -2240,9 +2240,51 @@ freischalten.
 - Die Uhrzeit der Blasen ist die, zu der die Zeile in der GUI erschienen ist (nach Neuladen der
   Seite die Zeit des Neuladens).
 
+### Stufe 3: Ansicht schmäler, Linkqualität (Client 2026.11.07.6)
+
+- **Wunsch (OE3GAS, 07.11.2026):** Chat-Feld schmäler und zentriert, keine Hinweise wie
+  „online“/„disconnected“, Linkqualität anzeigen. Keine Trennlinie (die Uhrzeit steht in den
+  Blasen).
+- Karte, Blasen und Eingabe in einer Spalte von höchstens 760 px, mittig; am Handy volle Breite.
+  `***`-Zeilen erscheinen nur noch in der rohen Terminal-Ansicht.
+- **Linkqualität:** keine Zeilen über Funk. Jede Seite liest die Zähler ihrer eigenen Verbindung
+  alle 30 s (`PEER_Q_SEC`): über AGW mit `Q` beim TinyBox-Fork von Direwolf
+  (oe3gas/direwolf-tinybox, `TINYBOX.md`), über KISS/AXUDP aus dem eigenen AX.25
+  (`Ax25Link.counters()`, dieselben Namen). Die Auswertung (Fenster 50 Frames / 30 min, Balken
+  nach Verlust) ist jetzt `prcore/linkq.py` – TinyBox und Client rechnen gleich
+  (`tinybox/linkq.py` importiert nur noch). Aus den eigenen Zählern kommen beide Richtungen:
+  → `i_retry / (i_new + i_retry)`, ← `(rej_tx + retry_rx) / i_rx`.
+- Karte: „→ Balken OE3GAS-10 ← Balken“, Tippen zeigt Frames, Wiederholungen, REJ, T1, SRT und den
+  Netto-Durchsatz (`bytes_new / tx_busy_ms`). Unter 20 Frames je Richtung graue Balken. Direwolf
+  ohne Fork: „no link data (Direwolf without the TinyBox fork)“; AXUDP: kein Funkweg.
+
+### Stufe 4: Chat-Verlauf (Client 2026.11.07.6, `tbclient/peerchat.py`)
+
+- **Wunsch (OE3GAS):** Verlauf behalten; beide müssen dasselbe sehen – Hash austauschen, Löschen
+  per Knopf, der Partner löscht mit; passt es nicht zusammen, löschen beide.
+- **Speicher:** `data/tbclient/peerchat.db` (SQLite, nicht im Repo), je Gegenstation (Rufzeichen
+  mit SSID) die letzten **100** Zeilen je Richtung.
+- **Zwei Ströme mit Hash-Kette:** gesendet und empfangen getrennt (AX.25 hält die Reihenfolge je
+  Richtung; gekreuzte Zeilen machen so keinen Unterschied). `h(n) = sha1(h(n-1) + LF + Text)[:8]`.
+  Dazu eine **Generation** (Zufall, neu bei jedem Löschen).
+- **Beim Connect** (beide kennen `HIST`): `//HIST g=<gen> m=<n>:<h> y=<n>:<h>`. Jede Seite prüft
+  ihren gesendeten Strom gegen das, was die andere empfangen hat:
+  - gleich → nichts;
+  - der anderen fehlt nur das Ende (höchstens 10 Zeilen, z. B. beim Disconnect verloren) → die
+    Zeilen gehen noch einmal hinaus (`//HM <n> <unix> <text>`), kein Schaden;
+  - sonst → `//HIST CLR g=<neu>`, beide löschen, Hinweis „chat history removed (not the same on
+    both sides)“.
+  - Andere Generation (einer hat gelöscht, als keine Verbindung bestand, oder erster Kontakt) →
+    beide löschen und nehmen die größere Generation; ein Hinweis nur, wenn wirklich etwas weg war.
+- **Knopf „Delete history“:** löscht hier, neue Generation, Hinweis „chat history removed“. Ist der
+  andere verbunden: `//HIST DEL g=<gen>` – er löscht sofort, Hinweis „chat history removed by …“.
+  Sonst merkt er es beim nächsten Connect an der Generation.
+- Die TBClient-Ansicht zeigt den gespeicherten Verlauf (auch nach dem Disconnect, Eingabe dann
+  gesperrt); `POST /api/peer/clear {"ch": n}`, Snapshot `peerchat`.
+- Tests: `tests/test_peerchat.py`.
+
 ### Später (eigene Stufen)
 
-- Linkqualität beider Seiten (Retries/REJ, Balken wie `%Q`).
 - Emoticons/Emoji und Reaktionen in der TBClient-Ansicht.
 - Bilder direkt (CR12-Verfahren, binär).
 - Direkte Nachricht/Datei mit LZHUF.
