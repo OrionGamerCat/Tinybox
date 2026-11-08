@@ -63,6 +63,18 @@ max_subpages       = 40        ; Format 2: höchstens so viele Fragmente je Seit
 dict_source        = Mailbox OE3GAS-1, Befehl DICT   ; wird mit der Dictionary-Version angekündigt (leer = nein)
 dict_broadcast_hours = 24     ; Dictionary gepackt über Funk senden, alle n Stunden (0 = aus)
 
+[traffic]                     ; nur Station: der echte Verkehr zwischen Stationen geht vor
+                              ; (Notfall-Seiten, Priorität 3, gehen immer)
+quiet_s           = 20        ; eine Seite beginnt erst, wenn so lange kein fremder Frame kam
+connected_quiet_s = 60        ; ... nach einem Frame einer Verbindung (I/RR/REJ/SABM ...) länger
+hint_timeout_s    = 120       ; so lange gilt die Meldung der TinyBox ([brocast] publish = yes)
+busy_percent      = 5         ; Stufe 1 (Benutzer an der TinyBox): Airtime-Budget statt airtime_percent;
+                              ; dann auch nur neue Revisionen (keine Wiederholungen) ...
+busy_burst_frames = 1         ; ... nur 1 Frame je Aussendung ...
+busy_max_parts    = 12        ; ... und keine Seiten mit mehr Teilen (Dictionary-Daten)
+                              ; Stufe 2 (Forward der TinyBox): nichts außer Notfall-Seiten.
+                              ; Die Bake kommt nur, wenn nichts wartet und es ruhig ist.
+
 [beacon]                      ; nur Station: Bake im Klartext, damit jeder am Terminal/Monitor
                               ; sieht, was hier sendet (UI-Frame, kein brocast-Format)
 interval_min = 30             ; alle n Minuten (mindestens 5), 0 = keine Bake; die erste beim Start

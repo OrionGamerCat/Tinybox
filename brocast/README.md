@@ -277,7 +277,25 @@ Terminal oder Monitor, was hier sendet. Text frei (`text`, höchstens 250 Bytes,
 Platzhalter `{call}` `{version}` `{pages}`); mehrere Zeilen: die weiteren eingerückt unter
 `text =`, sie gehen mit CR getrennt im selben Frame. Die Bake geht nie mitten in eine Seite, zählt zur
 Airtime, wird aber vom Budget nicht zurückgehalten; sie steht im Sendeprotokoll und unter
-„Zuletzt gesendet“.
+„Zuletzt gesendet“. Sie hat die niedrigste Priorität: Sie kommt nur, wenn keine Seite fällig ist
+und der Kanal ruhig ist – bei viel Verkehr also später als nach `interval_min`.
+
+**Rücksicht auf den echten Verkehr (Station, `[traffic]`):** Bulletins sollen den Verkehr
+zwischen Stationen nicht stören. brocastd hält eine Seite zurück, wenn
+
+- **der Kanal belegt ist:** Eine Seite beginnt erst, wenn `quiet_s` (20 s) kein fremder Frame
+  kam; war es ein Frame einer Verbindung (I, RR, REJ, SABM …), wartet sie `connected_quiet_s`
+  (60 s). Das hört brocastd selbst mit, auch Verkehr anderer Stationen.
+- **die TinyBox meldet, dass bei ihr etwas los ist** (`[brocast] publish = yes`; sie schickt
+  `PUT /api/v1/busy` bei jeder Änderung, sonst alle 30 s; die Meldung gilt `hint_timeout_s`):
+  - **Stufe 1 – Benutzer über Funk verbunden:** nur neue Revisionen (keine Wiederholungen),
+    keine Seiten mit mehr als `busy_max_parts` Teilen, `busy_burst_frames` Frame je
+    Aussendung, Airtime-Budget `busy_percent` statt `airtime_percent`.
+  - **Stufe 2 – Forward über Funk:** nichts.
+
+Notfall-Seiten (Priorität 3) gehen immer. In der Kopfzeile steht dann „⏸ ZURÜCKGESTELLT“ mit
+dem Grund, z. B. „Forward OE5XBL“ oder „Kanal belegt“; Telnet- und AXUDP-Verbindungen der TinyBox
+zählen nicht.
 
 **Seite nicht mehr senden:** „✕“ bei „Als Nächstes“ (oder „Nicht mehr senden“ bei einer eigenen
 Seite) nimmt sie aus der Sendung: Die Hörer bekommen die Rücknahme und löschen sie, und schickt
@@ -296,6 +314,7 @@ Die Rohdaten liefert weiterhin die JSON-API:
 | --- | --- |
 | `http://127.0.0.1:7733/api/v1/status` | Status |
 | `POST /api/v1/tx/off {"id": n}` · `POST /api/v1/tx/restore {"provider", "key"}` | Station: Seite aus der Sendung nehmen / wieder senden |
+| `PUT http://127.0.0.1:8090/api/v1/busy {"level": 0-2, "why"}` | Station, Ingest-API (Token): Belegtmeldung der TinyBox |
 | `http://127.0.0.1:7733/api/v1/tx` | Station: was gerade gesendet wird (Seite, Teil n/gesamt), was als Nächstes kommt, zuletzt gesendet, Airtime-Budget – aktualisiert bei jeder Übergabe eines Frames an Direwolf |
 | `http://127.0.0.1:7733/api/v1/categories` | Rubriken mit Anzahl/ungelesen (auch leere, die eine Station ankündigt) |
 | `http://127.0.0.1:7733/api/v1/rubrics` | alle Rubriken für die Abo-Matrix, mit Beschreibung und `stations` |

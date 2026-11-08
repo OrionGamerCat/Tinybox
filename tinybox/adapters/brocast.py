@@ -6,6 +6,9 @@ and calls brocastd's ingest API on the same PC (standard library only):
     bulletin created / edited   -> PUT    /pages/tinybox/<msg number>
     bulletin deleted / expired  -> DELETE /pages/tinybox/<msg number>
     at start and every sync_min -> PUT    /pages/tinybox   (full list)
+    every 30 s / on a change    -> PUT    /busy  {"level", "why"}: 2 = forward over the
+                                   radio, 1 = stations connected over the radio, 0 = free;
+                                   brocastd steps back ([traffic] in brocastd.conf)
 
 Private messages (type P) and the system rubric TBNEWS (client news) are
 never reported: TinyBox users get TBNEWS by connecting or via the client,
@@ -62,6 +65,8 @@ PROVIDER = "tinybox"
 TITLE_MAX = 40
 TIMEOUT_SEC = 5
 RETRY_SEC = 60                    # full sync interval while brocastd is not reachable
+BUSY_SEC = 30                     # busy report to brocastd at least this often (it expires
+BUSY_CHECK_SEC = 5                # after [traffic] hint_timeout_s there), checked this often
 FOREVER_MIN = 365 * 1440          # bulletins never expire (bulletin_expire_days = 0)
 
 
@@ -273,8 +278,39 @@ class BrocastPublisher:
     def full_list(self) -> dict[str, Any]:
         return {str(m.id): to_page(m, self.app) for m in self.bulletins()}
 
+    # --- busy report: brocast steps back for the real traffic (08.11.2026) ---------
+
+    def busy_level(self) -> tuple[int, str]:
+        """2 = forward over the radio, 1 = stations connected over the radio
+        (KISS/AGW, not AXUDP/telnet), 0 = free."""
+        fwd = self.app.forward
+        if fwd is not None and getattr(fwd, "radio_busy", None):
+            return 2, "Forward " + ", ".join(sorted(fwd.radio_busy))
+        calls = sorted({s.call for s in self.app.registry
+                        if getattr(s, "origin", "") == "radio" and not s.closed})
+        if calls:
+            more = f" +{len(calls) - 3}" if len(calls) > 3 else ""
+            return 1, "verbunden: " + ", ".join(calls[:3]) + more
+        return 0, ""
+
+    async def busy_loop(self) -> None:
+        last: tuple[int, str] | None = None
+        sent_at = 0.0
+        while True:
+            now = time.monotonic()
+            level = self.busy_level()
+            if level != last or now - sent_at >= BUSY_SEC:
+                status, _ = await self.request("PUT", "/busy", {"level": level[0], "why": level[1]},
+                                               quiet=True)
+                if status == 200:
+                    if level != last:
+                        log.debug("brocast: busy %s %s", *level)
+                    last, sent_at = level, now
+            await asyncio.sleep(BUSY_CHECK_SEC)
+
     async def run(self) -> None:
         worker = asyncio.create_task(self._worker())
+        busy = asyncio.create_task(self.busy_loop())
         try:
             while True:
                 await self.sync()
@@ -282,6 +318,7 @@ class BrocastPublisher:
                 await asyncio.sleep(self.cfg.sync_min * 60 if self.online else RETRY_SEC)
         finally:
             worker.cancel()
+            busy.cancel()
 
     async def sync(self) -> None:
         msgs = {str(m.id): m for m in self.bulletins()}
@@ -318,8 +355,10 @@ class BrocastPublisher:
             elif status:
                 log.warning("brocast: bulletin %s: HTTP %s %s", key, status, res.get("error", ""))
 
-    async def request(self, method: str, path: str, body: Any = None) -> tuple[int, dict]:
-        """One HTTP/1.1 request to brocastd. Returns (0, {}) if not reachable."""
+    async def request(self, method: str, path: str, body: Any = None,
+                      quiet: bool = False) -> tuple[int, dict]:
+        """One HTTP/1.1 request to brocastd. Returns (0, {}) if not reachable.
+        quiet: the busy report - no log lines, does not count as reachable."""
         data = b"" if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
         head = [f"{method} {self.cfg.ingest_path}{path} HTTP/1.1",
                 f"Host: {self.cfg.ingest_host}:{self.cfg.ingest_port}",
@@ -336,15 +375,18 @@ class BrocastPublisher:
             raw = await asyncio.wait_for(reader.read(), TIMEOUT_SEC)
             writer.close()
         except (OSError, asyncio.TimeoutError) as exc:
+            if quiet:
+                return 0, {}
             if self.online:
                 log.warning("brocast: brocastd not reachable (%s) - bulletins will be "
                             "synced later", exc)
             self.online = False
             return 0, {}
-        if not self.online:
-            log.info("brocast: brocastd reachable again")
-        self.online = True
-        self.sent += 1
+        if not quiet:
+            if not self.online:
+                log.info("brocast: brocastd reachable again")
+            self.online = True
+            self.sent += 1
         try:
             status = int(raw.split(b" ", 2)[1])
             payload = json.loads(raw.split(b"\r\n\r\n", 1)[1] or b"{}")

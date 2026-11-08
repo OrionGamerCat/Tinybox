@@ -179,3 +179,80 @@ class BeaconConfigTests(unittest.TestCase):
                 p.write_text(base + "[beacon]\n" + bad, encoding="utf-8")
                 with self.assertRaises(config.ConfigError):
                     config.load(p)
+
+
+class TrafficTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.clock = Clock()
+        self.sent: list[bytes] = []
+
+        async def send(data: bytes) -> bool:
+            self.sent.append(data)
+            return True
+
+        async def sleep(s: float) -> None:
+            pass
+
+        self.st, self.store = make_station(self.clock)
+        self.car = Carousel(self.store, send, self.st.cfg.station, "OE3GAS-5", self.clock,
+                            mono=lambda: 0.0, sleep=sleep)
+
+    async def test_forward_holds_everything_but_emergencies(self):
+        self.car.set_hint(2, "Forward OE1XAB")
+        self.st.put("tinybox", "1", BULLETIN)
+        await self.car.step()
+        self.assertEqual(self.sent, [])
+        tx = self.car.tx_state()
+        self.assertEqual((tx["blocked"]["reason"], tx["blocked"]["why"]), ("busy", "Forward OE1XAB"))
+        self.st.put("tinybox", "2", {**BULLETIN, "ti": "Sturm", "pri": 3})
+        await self.car.step()
+        self.assertEqual(len(self.sent), 1)                       # the emergency went
+        self.assertEqual(self.store.get_page("tinybox", "1").tx_count, 0)
+        self.clock.t += self.car.traffic.hint_timeout_s + 1       # TinyBox silent: report expires
+        await self.car.step()
+        self.assertEqual(self.store.get_page("tinybox", "1").tx_count, 1)
+
+    async def test_channel_heard(self):
+        self.st.put("tinybox", "1", BULLETIN)
+        self.car.heard("OE1ABC", "OE3XYZ-1", "I")                 # a connection is running
+        await self.car.step()
+        self.assertEqual(self.sent, [])
+        self.assertEqual(self.car.tx_state()["blocked"]["reason"], "channel")
+        self.clock.t += self.car.traffic.quiet_s + 1
+        await self.car.step()
+        self.assertEqual(self.sent, [])                           # connected: longer
+        self.clock.t += self.car.traffic.connected_quiet_s
+        await self.car.step()
+        self.assertEqual(len(self.sent), 1)
+        self.car.heard("OE1ABC", "APRS", "UI")
+        self.clock.t += 5
+        self.assertGreater(self.car.channel_wait()[0], 0)
+
+    async def test_users_connected(self):
+        self.car.set_hint(1, "verbunden: OE3TEC")
+        self.assertEqual(self.car._limit(), 1)                    # 1 frame per transmission
+        self.st.put("tinybox", "1", BULLETIN)
+        await self.car.step()
+        self.assertEqual(len(self.sent), 1)                       # new revision: goes
+        self.clock.t += 3600
+        self.car.set_hint(1, "verbunden: OE3TEC")                  # the TinyBox reports again
+        await self.car.step()
+        self.assertEqual(len(self.sent), 1)                       # repeat: waits
+        self.assertIn("Wiederholungen", self.car.tx_state()["blocked"]["why"])
+        self.car.set_hint(0)
+        await self.car.step()
+        self.assertEqual(len(self.sent), 2)
+
+    async def test_beacon_lowest(self):
+        from brocast.ax25 import UIFrame
+        self.car.set_beacon(lambda: UIFrame(dest="BEACON", src="OE3GAS-5", info=b"x").encode(), 30, "x")
+        self.car.set_hint(1, "verbunden")
+        await self.car.step()
+        self.assertEqual(self.sent, [])                           # busy: no beacon
+        self.car.set_hint(0)
+        self.car.heard("OE1ABC", "APRS", "UI")
+        await self.car.step()
+        self.assertEqual(self.sent, [])                           # channel not quiet
+        self.clock.t += 30
+        await self.car.step()
+        self.assertEqual(len(self.sent), 1)

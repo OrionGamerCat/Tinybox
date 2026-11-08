@@ -14,6 +14,12 @@
   * withdrawn pages are sent withdraw_repeats times, then removed
   * an airtime budget (percent of a sliding window) keeps the channel free
     for the BBS; emergency pages (pri 3) may exceed it
+  * real traffic first (08.11.2026, [traffic]): the TinyBox reports how busy it is
+    (level 1 = users connected: small budget, 1 frame per transmission, only new
+    revisions and small pages; level 2 = forward: nothing), and brocastd hears the
+    channel itself - after a foreign frame it waits quiet_s, after a connected-mode
+    frame connected_quiet_s. Emergency pages (pri 3) go anyway. The beacon has the
+    lowest priority: only when nothing else waits and the channel is quiet.
   * what is on the air right now, what waits and what went out last is kept
     for the web GUI (tx_state(), view "Sendung", 08.11.2026) - updated with
     every frame handed to Direwolf, like the Sendeprotokoll
@@ -27,7 +33,7 @@ import time
 from collections import deque
 from typing import Awaitable, Callable
 
-from .config import StationCfg
+from .config import StationCfg, TrafficCfg
 from .frame import airtime_s, build as build_frame, tx_airtime_s
 from .store import PageRow, Store
 from .txlog import TxLog, title_of
@@ -84,7 +90,8 @@ class Carousel:
                  txlog: TxLog | None = None,
                  mono: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-                 queue_len: Callable[[], Awaitable[int | None]] | None = None):
+                 queue_len: Callable[[], Awaitable[int | None]] | None = None,
+                 traffic: TrafficCfg | None = None):
         self.store, self.send, self.cfg, self.callsign = store, send, cfg, callsign
         self.clock = clock
         self.mono, self.sleep = mono, sleep
@@ -112,9 +119,80 @@ class Carousel:
         self.beacon_interval_s = 0.0
         self.beacon_next = 0.0
         self.beacon_text = ""
+        # [traffic]: the TinyBox's busy report, what brocastd heard on the channel
+        self.traffic = traffic or TrafficCfg()
+        self.hint: dict | None = None          # {"level", "why", "at"}
+        self.heard_at = 0.0                    # clock() of the last foreign frame
+        self.heard_from = ""
+        self.connected_at = 0.0                # ... of the last foreign connected-mode frame
+        self.connected_who = ""
 
     def wake(self) -> None:
         self._wake.set()
+
+    # --- [traffic]: real traffic first ---------------------------------------------
+
+    def set_hint(self, level: int, why: str = "") -> None:
+        """The TinyBox: 0 free, 1 users connected, 2 forward / data transfer."""
+        level = max(0, min(int(level), 2))
+        old = self.hint["level"] if self.hint else 0
+        self.hint = {"level": level, "why": str(why)[:80], "at": self.clock()}
+        if level != old:
+            log.info("TinyBox meldet Betrieb %s%s", level, f" ({why})" if why else "")
+        if level < old:
+            self.wake()
+
+    def heard(self, src: str, dest: str, kind: str) -> None:
+        """A frame of another station on our channel (kind UI / I / S / U)."""
+        now = self.clock()
+        self.heard_at, self.heard_from = now, src
+        if kind in ("I", "S", "U"):                       # a connection is running
+            self.connected_at, self.connected_who = now, f"{src} > {dest}"
+
+    def level(self) -> tuple[int, str]:
+        """The TinyBox's level (if its report is fresh)."""
+        h = self.hint
+        if h is None or self.clock() - h["at"] > self.traffic.hint_timeout_s:
+            return 0, ""
+        return h["level"], h["why"]
+
+    def channel_wait(self) -> tuple[float, str]:
+        """Seconds to wait because of what we heard on the channel (0 = quiet)."""
+        now, t = self.clock(), self.traffic
+        wait_c = self.connected_at + t.connected_quiet_s - now if self.connected_at else 0
+        wait_u = self.heard_at + t.quiet_s - now if self.heard_at else 0
+        if wait_c > 0 and wait_c >= wait_u:
+            return wait_c, f"Verbindung auf dem Kanal ({self.connected_who})"
+        if wait_u > 0:
+            return wait_u, f"Kanal belegt ({self.heard_from})"
+        return 0.0, ""
+
+    def _limit(self) -> int:
+        """Frames per transmission: fewer while users are on the TinyBox."""
+        lim = self.cfg.burst_frames
+        if self.level()[0] >= 1:
+            lim = min(lim, self.traffic.busy_burst_frames) if lim > 0 else self.traffic.busy_burst_frames
+        return lim
+
+    def _hold(self, row: PageRow, frames: int, needed: float, now: float) -> tuple[float, str, str] | None:
+        """Why this page waits for the real traffic -> (seconds, reason, why) or None."""
+        if row.pri >= EMERGENCY:
+            return None                                    # emergencies always go
+        level, why = self.level()
+        if level >= 2:
+            return 10.0, "busy", why or "Forward"
+        wait, heard = self.channel_wait()
+        if wait > 0:
+            return wait, "channel", heard
+        if level == 1 and row.state == "active":
+            if row.tx_count > 0:
+                return 30.0, "busy", (why or "Betrieb") + " – Wiederholungen warten"
+            if frames > self.traffic.busy_max_parts:
+                return 30.0, "busy", (why or "Betrieb") + f" – große Seite ({frames} Teile) wartet"
+            limit = self.budget.window * self.traffic.busy_percent / 100
+            if self.budget.spent(now) + needed > limit:
+                return 30.0, "busy", (why or "Betrieb") + f" – Budget {self.traffic.busy_percent:g} %"
+        return None
 
     def gap_min(self, sends_done: int, age_s: float = 0.0) -> int:
         """Minuten bis zur nächsten Aussendung. 0 = ruhen (nicht mehr senden).
@@ -135,7 +213,7 @@ class Carousel:
     async def _pace(self, frame_len: int) -> None:
         """Before handing one frame to Direwolf: start a new transmission (and
         wait for the gap) when the current one is full or already over."""
-        limit = self.cfg.burst_frames
+        limit = self._limit()
         if limit <= 0:
             return
         t = self.mono()
@@ -204,10 +282,13 @@ class Carousel:
 
     async def _beacon(self, now: float) -> bool:
         """[beacon] due: one UI frame in plain text, between two pages (never in
-        the middle of one). Counts towards the airtime, but is never held back
-        by the budget - it is the station's identification. False = link down."""
+        the middle of one). The lowest priority: only when no page waits, the
+        TinyBox is free and the channel quiet - no fixed interval when there is a
+        lot going on. Counts towards the airtime. False = link down."""
         if self.beacon_build is None or self.beacon_interval_s <= 0 or now < self.beacon_next:
             return True
+        if self.level()[0] > 0 or self.channel_wait()[0] > 0 or self.store.due_pages(int(now)):
+            return True                                    # later, when it is quiet
         frame = self.beacon_build()
         await self._pace(len(frame))
         if not await self.send(frame):
@@ -230,9 +311,6 @@ class Carousel:
     async def step(self) -> float:
         """Send what is due. Returns seconds until the next useful step."""
         now = self.clock()
-        if not await self._beacon(now):
-            log.debug("Direwolf nicht verbunden, Bake verschoben")
-            return 5.0
         for row in self.store.expired_pages(int(now)):
             log.info("Seite %s (%s/%s) abgelaufen, entfernt", row.id, row.provider, row.pkey)
             self.store.delete_page(row.pid)
@@ -241,7 +319,16 @@ class Carousel:
             frames = [build_frame(self.callsign, data, self.cfg.path, row.hdr)
                       for data in self.store.frames(row.pid)]
             needed = tx_airtime_s([len(f) for f in frames], self.cfg.baud,
-                                  self.cfg.txdelay_ms, self.cfg.burst_frames)
+                                  self.cfg.txdelay_ms, self._limit())
+            hold = self._hold(row, len(frames), needed, self.clock())
+            if hold is not None:
+                wait, reason, why = hold
+                self.blocked = {"reason": reason, "why": why, "until": self.clock() + wait,
+                                "page": row.id, "level": self.level()[0],
+                                "waiting": len(self.store.due_pages(int(now)))}
+                if any(r.pri >= EMERGENCY for r in self.store.due_pages(int(now))):
+                    continue                               # an emergency further down: send it
+                return min(max(wait, 1.0), MAX_SLEEP)
             if row.pri < EMERGENCY and not self.budget.allows(now, needed):
                 wait = self.budget.free_at(now, needed) - now
                 log.debug("Airtime-Budget erschöpft, warte %.0f s", wait)
@@ -286,6 +373,9 @@ class Carousel:
                      row.id, row.rev, len(frames), bursts, "en" if bursts > 1 else "", needed,
                      " [zurückgezogen]" if row.state == "withdrawn" else "")
 
+        if not await self._beacon(self.clock()):
+            log.debug("Direwolf nicht verbunden, Bake verschoben")
+            return 5.0
         nxt = self.store.next_due()
         if self.beacon_build is not None and self.beacon_interval_s > 0:
             nxt = self.beacon_next if nxt is None else min(nxt, self.beacon_next)
@@ -294,7 +384,7 @@ class Carousel:
         return min(max(nxt - self.clock(), 0.5), MAX_SLEEP)
 
     def _bursts(self, frames: int) -> int:
-        limit = self.cfg.burst_frames
+        limit = self._limit()
         return -(-frames // limit) if limit > 0 else 1
 
     def _count_frame(self) -> None:
@@ -347,7 +437,10 @@ class Carousel:
                 "budget": {"used_s": round(b.spent(now), 1), "limit_s": round(b.limit, 1),
                            "percent": self.cfg.airtime_percent,
                            "window_min": self.cfg.airtime_window_min},
-                "gap_s": self.cfg.burst_gap_s, "burst_frames": self.cfg.burst_frames,
+                "gap_s": self.cfg.burst_gap_s, "burst_frames": self._limit(),
+                "traffic": {"level": self.level()[0], "why": self.level()[1],
+                            "channel_wait": round(self.channel_wait()[0]),
+                            "channel": self.channel_wait()[1]},
                 "beacon": None if self.beacon_build is None or self.beacon_interval_s <= 0 else
                 {"interval_min": round(self.beacon_interval_s / 60), "next": self.beacon_next,
                  "text": self.beacon_text},

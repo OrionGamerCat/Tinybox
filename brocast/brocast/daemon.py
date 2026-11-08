@@ -80,7 +80,7 @@ class Daemon:
                 async def queue_len() -> int | None:
                     return await link.queue_len(dw.channel)
             self.carousel = Carousel(self.store, self._send, cfg.station, cfg.callsign, clock,
-                                     txlog=self.txlog, queue_len=queue_len)
+                                     txlog=self.txlog, queue_len=queue_len, traffic=cfg.traffic)
             self.carousel.schedules[DICT_DATA] = self._dict_gap
             if cfg.beacon.interval_min:
                 self.carousel.set_beacon(self._beacon_frame, cfg.beacon.interval_min,
@@ -89,6 +89,7 @@ class Daemon:
                                    zd=self.zd)
             self.ingest = IngestServer(self.station, cfg.station.ingest_host,
                                        cfg.station.ingest_port, cfg.station.token, self.status)
+            self.ingest.busy = self.carousel.set_hint      # [traffic]: PUT /busy from the TinyBox
 
     async def _send(self, data: bytes) -> bool:
         ok = await self.link.send(data, self.cfg.direwolf.channel)
@@ -101,6 +102,10 @@ class Daemon:
 
     def on_frame(self, channel: int, data: bytes) -> None:
         if channel == self.cfg.direwolf.channel:
+            if self.carousel is not None:              # [traffic]: someone else on the channel?
+                src, dest, kind = describe_other(data)
+                if src.upper() != self.cfg.callsign:
+                    self.carousel.heard(src, dest, kind)
             self._receive(data, own=False)
 
     def _receive(self, data: bytes, own: bool) -> None:
@@ -389,6 +394,10 @@ class Daemon:
                 and st.compress and self.zd.ok else "")))
             items.append(("Alterung", ", ".join(f"ab {h} h alle {m} min" if m else f"ab {h} h Pause"
                                                 for h, m in st.aging) or "aus"))
+            t = cfg.traffic
+            items.append(("Rücksicht", f"Ruhe {t.quiet_s} s, nach Verbindungsframes {t.connected_quiet_s} s; "
+                                       f"bei TinyBox-Betrieb {t.busy_percent:g} % Budget, "
+                                       f"{t.busy_burst_frames} Frame/Aussendung"))
             b = cfg.beacon
             items.append(("Bake", f"alle {b.interval_min} min an {b.dest}: "
                           f"{' / '.join(self._beacon_text().splitlines())}"

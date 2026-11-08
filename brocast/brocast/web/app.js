@@ -2392,6 +2392,10 @@ function renderTxHeader() {
     bar.style.width = Math.round((100 * cur.sent) / Math.max(cur.total, 1)) + "%";
     pill.replaceChildren(el("span", "rec", "ON AIR"), el("span", "y", `P${cur.id}`),
       el("span", "t", cur.title || cur.typ), el("span", "c", `${cur.sent}/${cur.total}`), bar);
+  } else if (bl && (bl.reason === "busy" || bl.reason === "channel")) {   // real traffic first
+    pill.classList.add("pause");
+    pill.replaceChildren(el("b", null, "⏸ ZURÜCKGESTELLT"),
+      el("span", "t", `${bl.why}${bl.waiting ? ` – ${bl.waiting} Seite${bl.waiting === 1 ? "" : "n"} warten` : ""}`));
   } else if (bl && bl.reason === "budget") {
     pill.classList.add("pause");
     pill.replaceChildren(el("b", null, "⏸ PAUSE"),
@@ -2481,7 +2485,9 @@ function renderTxView() {
   } else {
     const bl = tx.blocked;
     const n = tx.next.find((p) => p.next_tx);
-    nb.append(el("div", "nidle", bl && bl.reason === "budget"
+    nb.append(el("div", "nidle", bl && (bl.reason === "busy" || bl.reason === "channel")
+      ? `Zurückgestellt: ${bl.why}. brocast wartet, bis der Betrieb ruhiger ist – Notfall-Seiten gehen trotzdem.`
+      : bl && bl.reason === "budget"
       ? `Airtime-Budget aufgebraucht – frei in ${mmss(bl.until - tx.now)}. Notfall-Seiten gehen trotzdem.`
       : !tx.connected ? "Direwolf ist nicht verbunden – die Sendung wartet."
         : n ? `Als Nächstes: P${n.id} ${n.title || n.typ} ${n.next_tx <= tx.now ? "gleich" : "in " + mmss(n.next_tx - tx.now)}`
@@ -2499,7 +2505,9 @@ function renderTxView() {
   const fact = (k, val) => facts.append(el("span", "k", k), el("b", null, val));
   fact("Schnittstelle", tx.agw ? `${tx.interface} · Queue wird abgefragt` : `${tx.interface} · Ende berechnet`);
   fact("Heute gesendet", `${tx.today.pages} Seiten · ${tx.today.frames} Frames`);
-  fact("Pause zwischen Aussendungen", `${num(tx.gap_s)} s`);
+  fact("Pause zwischen Aussendungen", `${num(tx.gap_s)} s · ${tx.burst_frames} Frame${tx.burst_frames === 1 ? "" : "s"} je Aussendung`);
+  if (tx.traffic) fact("Betrieb", (["frei", "Benutzer verbunden", "Forward / Datenübertragung"][tx.traffic.level] || "?")
+    + (tx.traffic.why ? ` (${tx.traffic.why})` : "") + (tx.traffic.channel_wait ? ` · ${tx.traffic.channel}, noch ${tx.traffic.channel_wait} s` : ""));
   if (tx.beacon) fact("Bake", `alle ${tx.beacon.interval_min} min · nächste ${tx.beacon.next <= tx.now ? "gleich" : "in " + mmss(tx.beacon.next - tx.now)}`);
   bud.append(el("h3", null, "Airtime-Budget"), big, g,
     el("div", "bnote", "Wird es eng, warten normale Seiten; Notfall-Seiten (Priorität 3) gehen trotzdem."), facts);

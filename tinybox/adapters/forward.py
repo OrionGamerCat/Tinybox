@@ -50,6 +50,7 @@ class ForwardModule:
         self.failed_at: dict[str, float] = {}             # monotonic time of the last failure
         self._loop: asyncio.AbstractEventLoop | None = None
         self.busy: set[str] = set()                       # partners in a session now
+        self.radio_busy: set[str] = set()                 # ... over the radio (brocast steps back)
         self.last: dict[str, SessionResult] = {}          # last result per partner
         self.server: asyncio.AbstractServer | None = None
         self.listen_port = 0
@@ -159,12 +160,15 @@ class ForwardModule:
 
     async def _run(self, partner: PartnerCfg, link, master: bool, transport: str) -> SessionResult:
         self.busy.add(partner.call)
+        if transport != "tcp":
+            self.radio_busy.add(partner.call)
         try:
             s = ForwardSession(self.app.cfg.station.bbs_call, partner, link, master=master,
                                transport=transport, service=self.app.service)
             result = await s.run()
         finally:
             self.busy.discard(partner.call)
+            self.radio_busy.discard(partner.call)
         self.last[partner.call] = result
         self.last_call[partner.call] = time.monotonic()
         if result.ok:

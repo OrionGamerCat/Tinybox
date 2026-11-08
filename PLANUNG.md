@@ -1797,6 +1797,24 @@ Client bekommt je Bitrate eine Konfiguration `tbclient-testbed-<baud>.conf`.
 jeden Teilnehmer statt als UI-Frame – auf dem simulierten Kanal teurer als auf einer echten
 Frequenz.
 
+## 28. brocast weicht dem echten Verkehr (entschieden und umgesetzt 08.11.2026)
+
+Bulletins dürfen den Verkehr zwischen Stationen (Forward, Chats, Benutzer) nicht stören.
+Entscheidung (Gerhard): beide Wege zusammen.
+
+1. **Die TinyBox meldet**, was bei ihr los ist: `PUT /api/v1/busy {"level", "why"}` an die
+   Ingest-API, bei jeder Änderung, sonst alle 30 s (gilt bei brocastd `hint_timeout_s`, damit
+   eine abgestürzte TinyBox brocast nicht für immer stumm schaltet). Stufe 2 = Forward über Funk,
+   1 = Benutzer über Funk verbunden, 0 = frei. Telnet/AXUDP zählen nicht.
+2. **brocastd hört selbst mit:** Jeder fremde Frame schiebt den Beginn der nächsten Seite um
+   `quiet_s`, ein Verbindungs-Frame (I/S/U) um `connected_quiet_s` – das deckt auch Verkehr
+   fremder Stationen ab.
+
+Stufe 1 bremst (nur neue Revisionen, kleine Seiten, 1 Frame je Aussendung, kleineres Budget),
+Stufe 2 und belegter Kanal halten an. Eine angefangene Seite wird zu Ende gesendet.
+**Notfall-Seiten (Priorität 3) gehen immer.** Die **Bake hat die niedrigste Priorität**: kein
+gesicherter Intervall, sie kommt nur, wenn nichts wartet und es ruhig ist.
+
 ## Quellen
 
 - Forwarding-Konzept (Claude-Doc): https://claude.ai/code/artifact/ed861fd0-7519-4796-8f4b-8de6ab3fbd2a

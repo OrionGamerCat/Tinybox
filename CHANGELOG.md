@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- brocastd (Station): **Rücksicht auf den echten Verkehr** (`[traffic]`) – eine Seite beginnt
+  erst, wenn der Kanal `quiet_s` ruhig war (nach Verbindungs-Frames `connected_quiet_s`). Die
+  TinyBox meldet `PUT /busy`: Stufe 1 (Benutzer über Funk verbunden) nur neue Revisionen, kleine
+  Seiten, 1 Frame je Aussendung, `busy_percent`; Stufe 2 (Forward über Funk) nichts. Notfall-Seiten
+  gehen immer, die Bake nur, wenn alles ruhig ist. Kopfzeile „⏸ ZURÜCKGESTELLT“ mit Grund.
 - brocastd (Station): **Bake im Klartext** – `[beacon] interval_min`, `text`, `dest`, `path`:
   ein UI-Frame (z. B. an `BEACON`), der brocast als System nennt; Platzhalter `{call}` `{version}`
   `{pages}`. Zwischen zwei Seiten, im Sendeprotokoll, in der Ansicht „Sendung“.

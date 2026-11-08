@@ -11,6 +11,8 @@
     POST   /api/v1/validate                 dry run
     GET    /api/v1/dictionary               allowed names
     GET    /api/v1/status                   station status
+    PUT    /api/v1/busy                     {"level": 0|1|2, "why": "..."} the TinyBox's
+                                            traffic: brocast steps back ([traffic])
 
 Security: see webserver.py (loopback, Host check, JSON only, optional token).
 """
@@ -35,12 +37,19 @@ class IngestServer(JsonServer):
         super().__init__(host, port, token)
         self.station = station
         self.status = status
+        self.busy: Callable[[int, str], None] | None = None     # carousel.set_hint
 
     def route(self, req: Request) -> tuple[int, Any]:
         parts, method, body, st = req.parts, req.method, req.body, self.station
         try:
             if parts == ["status"] and method == "GET":
                 return 200, self.status()
+            if parts == ["busy"] and method == "PUT" and self.busy is not None:
+                if not isinstance(body, dict) or not isinstance(body.get("level"), int) \
+                        or isinstance(body.get("level"), bool) or not 0 <= body["level"] <= 2:
+                    raise BrocastError("{\"level\": 0, 1 oder 2, \"why\": \"...\"} erwartet")
+                self.busy(body["level"], str(body.get("why", "")))
+                return 200, {"ok": True}
             if parts == ["dictionary"] and method == "GET":
                 return 200, self._dictionary()
             if parts == ["validate"] and method == "POST":
@@ -62,7 +71,7 @@ class IngestServer(JsonServer):
                     return 200, st.delete(provider, key)
                 if method == "GET":
                     return 200, st.get(provider, key)
-            if parts and parts[0] in ("pages", "status", "dictionary", "validate", "rubrics"):
+            if parts and parts[0] in ("pages", "status", "dictionary", "validate", "rubrics", "busy"):
                 raise HttpError(405, f"Methode {method} hier nicht erlaubt")
             raise HttpError(404, "unbekannter Pfad")
         except NotFound as exc:

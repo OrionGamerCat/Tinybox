@@ -93,6 +93,7 @@ class FakeBrocastd:
 
     def __init__(self):
         self.requests: list[tuple[str, str, object]] = []
+        self.busy: list[dict] = []          # PUT /busy reports, kept apart from the pages
         self.event = asyncio.Event()
         self.reject_typ: str | None = None    # pages of this typ get HTTP 400 / an error
 
@@ -106,8 +107,11 @@ class FakeBrocastd:
         method, path, _ = lines[0].split(" ")
         length = next((int(l.split(":")[1]) for l in lines if l.lower().startswith("content-length")), 0)
         body = json.loads(await reader.readexactly(length)) if length else None
-        self.requests.append((method, path, body))
-        self.event.set()
+        if path.endswith("/busy"):
+            self.busy.append(body)
+        else:
+            self.requests.append((method, path, body))
+            self.event.set()
         status, payload = b"200 OK", {"id": 24, "subpages": 1, "withdrawn": [], "errors": {}}
         if self.reject_typ and isinstance(body, dict):
             if body.get("typ") == self.reject_typ:
@@ -323,3 +327,66 @@ class AirDaysTests(unittest.TestCase):
         self.assertEqual(brocast.to_page(msg(), self.app)["exp"], 7 * 1440)
         self.app.cfg.brocast.air_days = 60          # Mailbox-Frist (30 Tage) ist kürzer
         self.assertEqual(brocast.to_page(msg(), self.app)["exp"], 30 * 1440)
+
+
+class _Sess:
+    def __init__(self, call, origin, closed=False):
+        self.call, self.origin, self.closed = call, origin, closed
+
+
+class _Fwd:
+    def __init__(self):
+        self.radio_busy: set[str] = set()
+
+
+class BusyTests(unittest.IsolatedAsyncioTestCase):
+    """brocast steps back for real traffic: the TinyBox reports 0/1/2 (08.11.2026)."""
+
+    def setUp(self):
+        self.app = make_app()
+
+    def publisher(self, port=1):
+        self.app.cfg.brocast = BrocastCfg(publish=True, ingest_port=port)
+        return brocast.BrocastPublisher(self.app)
+
+    async def test_free(self):
+        self.assertEqual(self.publisher().busy_level(), (0, ""))
+
+    async def test_radio_session_is_level_1(self):
+        self.app.registry.add(_Sess("OE1ABC", "radio"))
+        self.app.registry.add(_Sess("OE3TEL", "telnet"))
+        self.app.registry.add(_Sess("OE9OLD", "radio", closed=True))
+        self.assertEqual(self.publisher().busy_level(), (1, "verbunden: OE1ABC"))
+
+    async def test_radio_forward_is_level_2(self):
+        self.app.registry.add(_Sess("OE1ABC", "radio"))
+        self.app.forward = _Fwd()
+        self.app.forward.radio_busy.add("OE5XBL")
+        self.assertEqual(self.publisher().busy_level(), (2, "Forward OE5XBL"))
+
+    async def until(self, cond, timeout=2.0):
+        for _ in range(int(timeout / 0.02)):
+            if cond():
+                return
+            await asyncio.sleep(0.02)
+
+    async def test_loop_reports_changes(self):
+        fake = FakeBrocastd()
+        port = await fake.start()
+        pub = self.publisher(port)
+        old = brocast.BUSY_CHECK_SEC
+        brocast.BUSY_CHECK_SEC = 0.02
+        task = asyncio.create_task(pub.busy_loop())
+        try:
+            await self.until(lambda: len(fake.busy) >= 1)
+            self.app.registry.add(_Sess("OE1ABC", "radio"))
+            await self.until(lambda: len(fake.busy) >= 2)
+            await asyncio.sleep(0.1)
+        finally:
+            task.cancel()
+            brocast.BUSY_CHECK_SEC = old
+            await asyncio.gather(task, return_exceptions=True)
+            await fake.close()
+        self.assertEqual([b["level"] for b in fake.busy], [0, 1])
+        self.assertEqual(fake.busy[1]["why"], "verbunden: OE1ABC")
+        self.assertEqual(len(fake.busy), 2)                    # unchanged level: no repeat before 30 s

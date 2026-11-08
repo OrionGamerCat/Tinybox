@@ -89,6 +89,19 @@ class BeaconCfg:
 
 
 @dataclass
+class TrafficCfg:
+    """[traffic] (08.11.2026): brocast steps back for the real traffic between
+    stations - the TinyBox reports it is busy (PUT /busy), brocastd hears the
+    channel itself."""
+    quiet_s: int = 20             # a page starts only after this long without foreign frames
+    connected_quiet_s: int = 60   # ... after a connected-mode frame (I/RR/REJ/SABM...) longer
+    hint_timeout_s: int = 120     # a busy report from the TinyBox counts this long
+    busy_percent: float = 5.0     # airtime budget while users are on the TinyBox (level 1)
+    busy_burst_frames: int = 1    # frames per transmission at level 1
+    busy_max_parts: int = 12      # bigger pages wait at level 1 (dictionary data ...)
+
+
+@dataclass
 class ListenerCfg:
     web_host: str = "127.0.0.1"
     web_port: int = 7733
@@ -111,6 +124,7 @@ class Config:
     direwolf: DirewolfCfg = field(default_factory=DirewolfCfg)
     station: StationCfg = field(default_factory=StationCfg)
     beacon: BeaconCfg = field(default_factory=BeaconCfg)
+    traffic: TrafficCfg = field(default_factory=TrafficCfg)
     listener: ListenerCfg = field(default_factory=ListenerCfg)
     sources: dict = field(default_factory=dict)   # CR70: woher baud / txdelay kommen
     hints: list = field(default_factory=list)     # CR70: alte Schlüssel in der Datei
@@ -416,6 +430,24 @@ def load(path: str | Path) -> Config:
         cfg.hints.append("[beacon] text enthält Umlaute/Sonderzeichen - manche Terminals zeigen "
                          "sie falsch an (ASCII empfohlen)")
     cfg.beacon = bc
+
+    tr = TrafficCfg()
+    if cp.has_section("traffic"):
+        tr = TrafficCfg(quiet_s=getint("traffic", "quiet_s", tr.quiet_s),
+                        connected_quiet_s=getint("traffic", "connected_quiet_s", tr.connected_quiet_s),
+                        hint_timeout_s=getint("traffic", "hint_timeout_s", tr.hint_timeout_s),
+                        busy_percent=_float(get("traffic", "busy_percent", str(tr.busy_percent)),
+                                            "[traffic] busy_percent"),
+                        busy_burst_frames=getint("traffic", "busy_burst_frames", tr.busy_burst_frames),
+                        busy_max_parts=getint("traffic", "busy_max_parts", tr.busy_max_parts))
+    for name, lo, hi in (("quiet_s", 0, 600), ("connected_quiet_s", 0, 1800),
+                         ("hint_timeout_s", 30, 3600), ("busy_burst_frames", 1, 64),
+                         ("busy_max_parts", 1, 1000)):
+        if not lo <= getattr(tr, name) <= hi:
+            raise ConfigError(f"[traffic] {name} muss {lo}..{hi} sein")
+    if not 0 <= tr.busy_percent <= 100:
+        raise ConfigError("[traffic] busy_percent muss 0..100 sein")
+    cfg.traffic = tr
 
     try:
         allow_lan = cp.getboolean("listener", "allow_lan", fallback=False)
