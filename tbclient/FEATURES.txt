@@ -27,6 +27,9 @@ Zuletzt dazugekommen
   gleich auf diesen Kanal (Terminal, bei einem TBClient dessen Ansicht).
 - Bilder zwischen zwei TBClients (CR78): Knopf im TBClient-Chat, ueber Funk
   nur der Verweis; der andere holt das Bild per Antippen beim Sender.
+- Dateien zwischen zwei TBClients (CR78): Knopf (Bueroklammer), max. 64 KB, LZHUF;
+  der andere holt sie per Antippen beim Sender. Die Karte zeigt, wie weit
+  die Uhren der beiden auseinander liegen.
 - Emoticons in der TBClient-Ansicht: :-) wird zum Emoji, Emoji-Knopf; ueber
   Funk gehen sie als :-) bzw. ~XY wie im TinyBox-Chat.
 - Konsole im tbclient-Fenster: I / INFO zeigt den Startblock noch einmal

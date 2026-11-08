@@ -5,6 +5,7 @@ the delete button) and the link quality from the Direwolf fork's 'Q'."""
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import dataclasses
 import tempfile
 import time
@@ -13,6 +14,7 @@ from pathlib import Path
 
 from prcore import chatimg
 from tbclient import core as core_mod
+from tbclient import peerfile
 from tbclient import peerchat
 from tbclient.core import ClientCore
 from tests.test_tbclient import FakeDirewolf, client_cfg, until
@@ -155,6 +157,50 @@ class PeerHistoryTests(unittest.TestCase):
                 self.assertTrue(a.peer_image_get(1, oh))
                 await until(lambda: a.images.loading.get(oh, {}).get("error"))
                 self.assertFalse(a.images.store.has(oh))
+                for t in tasks:
+                    t.cancel()
+            dw.server.close()
+        asyncio.run(scenario())
+
+    def test_file_between_clients(self):
+        """CR78: a file - offered as a chat line, fetched on a tap, LZHUF on the
+        air (raw if that is not smaller); the clocks are compared at the start."""
+        async def scenario():
+            dw = FakeDirewolf()
+            port = await dw.start()
+            with tempfile.TemporaryDirectory() as ta, tempfile.TemporaryDirectory() as tb:
+                a = ClientCore(client_cfg(ta, agw_port=port))
+                b = ClientCore(dataclasses.replace(client_cfg(tb, agw_port=port), mycall="OE3TEC"))
+                tasks = [asyncio.create_task(a.run()), asyncio.create_task(b.run())]
+                await asyncio.wait_for(a.port.agw_up.wait(), 5)
+                await asyncio.wait_for(b.port.agw_up.wait(), 5)
+                await until(lambda: len([c for c in dw.clients if c["calls"]]) == 2)
+                self.assertTrue(await b.connect("OE3GAS", ch=1))
+                await until(lambda: a.channels[1].peer is not None and b.channels[1].peer is not None)
+                await asyncio.sleep(0.2)
+                self.assertLessEqual(abs(a.channels[1].peer.clock_off), 2)       # same PC clock
+                self.assertEqual(a.channels[1].summary(0)["peer"]["clock"], a.channels[1].peer.clock_off)
+                text = ("Antennenbau: Dipol fuer 2 m, Laenge 98 cm\n" * 200).encode()
+                rnd = b"".join(hashlib.sha256(i.to_bytes(2, "big")).digest() for i in range(100))
+                for name, data in (("../dipol notes.txt", text), ("bin.dat", rnd)):
+                    self.assertTrue(b.peer_file(1, name, data))
+                    h = chatimg.image_hash(data)
+                    await until(lambda: any(m["text"].startswith(f"~%{h} ")
+                                            for m in a.peerchat.messages("OE3TEC")))
+                    ref = peerfile.parse_ref(a.peerchat.messages("OE3TEC")[-1]["text"])
+                    self.assertEqual(ref[0], h)
+                    self.assertEqual(ref[1], len(data))
+                    self.assertFalse("/" in ref[3])
+                    self.assertTrue(a.peer_file_get(1, h))
+                    await until(lambda: a.files.has(h))
+                    self.assertEqual(a.files.get(h), data)
+                    self.assertIn(h, a.snapshot(1)["peerchat"]["files"]["have"])
+                self.assertEqual(ref[2], len(rnd))                  # not packable: raw
+                self.assertEqual(peerfile.parse_ref(f"~%{chatimg.image_hash(text)} 1 1 x")[3], "x")
+                # a file never offered to them: refused
+                b.files.put("abcdef", b"geheim")
+                self.assertTrue(a.peer_file_get(1, "abcdef"))
+                await until(lambda: a.file_loading.get("abcdef", {}).get("error"))
                 for t in tasks:
                     t.cancel()
             dw.server.close()

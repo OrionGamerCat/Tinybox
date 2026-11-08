@@ -1,0 +1,3 @@
+- Dateien zwischen zwei TBClients (max. 64 KB, LZHUF), per Antippen
+  beim Sender geholt.
+- Uhrzeitabgleich: Karte zeigt, wie weit die Uhren auseinander sind.

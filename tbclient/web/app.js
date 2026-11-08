@@ -2317,6 +2317,7 @@ function renderPeer(c, mon) {
   $("peer-clear").classList.toggle("hidden", !p || !p.hist || !pv);
   $("peer-emoji").classList.toggle("hidden", !pv);
   $("peer-img").classList.toggle("hidden", !pv || !p || !p.img);
+  $("peer-file").classList.toggle("hidden", !pv || !p || !p.file);
   if (!pv) { $("peer-picker").classList.add("hidden"); $("peer-hint").classList.add("hidden"); }
   $("peer-raw").classList.toggle("hidden", !p);
   $("peer-raw").textContent = pv ? "Terminal" : "TBClient view";
@@ -2348,6 +2349,16 @@ function renderPeerHead(c, p) {
   if (c.state !== "online") ver.append(el("span", "st-chip warn", "not connected"));
   info.append(ver);
   info.append(peerQuality(p.q, c));
+  if (p.clock !== null && p.clock !== undefined) {            // CR78: the two clocks
+    const off = p.clock, a = Math.abs(off);
+    const row = el("div", "ph-clock small");
+    if (a <= 10) row.textContent = "🕒 clocks agree";
+    else {
+      const txt = a < 120 ? `${a} s` : a < 7200 ? `${Math.round(a / 60)} min` : `${Math.round(a / 3600)} h`;
+      row.append("🕒 ", el("span", a > 60 ? "st-chip warn" : "", `their clock is ${txt} ${off > 0 ? "ahead" : "behind"}`));
+    }
+    info.append(row);
+  }
   if (p.heard) {
     info.append(el("div", "ph-heard small", p.heard.length
       ? "Hears: " + p.heard.map(([call, m]) => `${call} (${m ? m + " min" : "now"})`).join(", ")
@@ -2394,10 +2405,42 @@ function peerQuality(q, c) {
 }
 
 let peerChatKey = "";
+/* CR78: "~%<hash> <bytes> <bytes on air> <name>" - a file offered by the sender */
+const FILE_RE = /^~%([0-9a-f]{6}) (\d+) (\d+) (.+)$/;
+function fileBlock(m, ch) {
+  const [, hash, size, air, name] = m;
+  const F = (S.peerchat && S.peerchat.files) || { have: [], loading: {} };
+  const box = el("div", "fbox");
+  box.append(el("div", "fname", "📎 " + name));
+  const ld = F.loading[hash];
+  if (F.have.includes(hash)) {
+    const a = el("a", "fsave", `Save · ${Number(size)} bytes`);
+    a.href = `/file/${hash}/${encodeURIComponent(name)}`;
+    a.download = name;
+    box.append(a);
+  } else if (ld && !ld.error) {
+    const bar = el("div", "bar"), fill = el("div", "fill");
+    const total = ld.total || Number(air);
+    fill.style.width = Math.min(100, Math.round((100 * ld.done) / total)) + "%";
+    bar.append(fill);
+    box.append(el("div", "small", `${ld.done} / ${total} bytes on air`), bar);
+  } else {
+    box.append(el("div", "small", (ld && ld.error ? `⚠ ${ld.error} · ` : "")
+      + `${Number(size)} bytes, ${Number(air)} on air · ${secText(imgTime(Number(air), false))} · tap to load`));
+    box.classList.add("tap");
+    box.onclick = () => api("peer/fileget", { ch, hash });
+  }
+  return box;
+}
+
 function peerBubble(kind, text, t) {
   const b = el("div", "pb " + kind);
   const ref = imageRef(text);                     // CR78: a picture, fetched from the sender
-  if (ref) {
+  const fm = text.match(FILE_RE);
+  if (fm) {
+    b.classList.add("pfile");
+    b.append(fileBlock(fm, activeCh));
+  } else if (ref) {
     b.classList.add("pimg");
     const ch = activeCh;
     b.append(imageBlock(ref, kind === "tx", () => api("peer/imgget", { ch, hash: ref.hash })));
@@ -2413,7 +2456,8 @@ function renderPeerChat(lines) {
   if (pc) {                                     // the stored history (both sides know HIST)
     const last = pc.msgs.length ? pc.msgs[pc.msgs.length - 1].id : 0;
     const I = S.images || {};
-    const key = `${activeCh}:${pc.v}:${pc.msgs.length}:${last}:${(I.have || []).length}:${JSON.stringify(I.loading || {})}`;
+    const key = `${activeCh}:${pc.v}:${pc.msgs.length}:${last}:${(I.have || []).length}:${JSON.stringify(I.loading || {})}`
+      + JSON.stringify(pc.files || {});
     if (key === peerChatKey && termShown >= 0) return;
     const first = termShown < 0 || !peerChatKey.startsWith(activeCh + ":");
     const atBottom = out.scrollTop + out.clientHeight >= out.scrollHeight - 40;
@@ -2447,6 +2491,23 @@ function renderPeerChat(lines) {
 function peerToggle() {
   peerRaw = view === "peer";
   setView(baseView());
+}
+
+const PEER_FILE_MAX = 64 * 1024;
+async function peerSendFile(file) {
+  $("peer-filein").value = "";
+  if (!file || !activeCh) return;
+  const hint = $("peer-hint");
+  if (file.size > PEER_FILE_MAX) {
+    hint.className = "hint"; hint.classList.remove("hidden");
+    hint.textContent = `Too big: ${file.size} bytes (max. ${PEER_FILE_MAX}).`;
+    return;
+  }
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 4096) bin += String.fromCharCode(...buf.subarray(i, i + 4096));
+  const r = await postJson("peer/file", { ch: activeCh, name: file.name, data: btoa(bin) });
+  if (!r.ok) { hint.className = "hint"; hint.classList.remove("hidden"); hint.textContent = "The file was not accepted."; }
 }
 
 async function peerClear() {
@@ -2812,6 +2873,8 @@ async function start() {
   $("peer-clear").onclick = peerClear;
   $("peer-emoji").onclick = peerPicker;
   $("peer-img").onclick = () => $("imgfile").click();          // CR78: the same dialog
+  $("peer-file").onclick = () => $("peer-filein").click();     // CR78: a file, LZHUF
+  $("peer-filein").onchange = () => peerSendFile($("peer-filein").files[0]);
   $("term-input").addEventListener("input", (e) => {          // TBClient view: :-) -> emoji
     if (view !== "peer") return;
     if (e.inputType !== "deleteContentBackward") liveEmoticon(e.target);

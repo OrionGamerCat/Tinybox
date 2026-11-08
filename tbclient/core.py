@@ -26,7 +26,9 @@ from .kisslink import AxudpPort, KissLink, KissPort
 from .links import AgwLink, AgwPort, TelnetLink
 from .logbook import Logbook
 from .mailstore import MailStore
+from . import peerfile
 from .peerchat import PeerChat
+from .peerfile import FileStore
 from .profiles import Profiles
 from .radio import RawFrame, aprs_symbol, guess_mod128, monitor_entry
 from .sync import Syncer
@@ -153,6 +155,8 @@ class ClientCore:
         self.sync = Syncer(self, self.mailbox)
         # small images in the chat (CR12)
         self.images = Images(self, ImageStore(cfg.data_dir / "images"))
+        self.files = FileStore(cfg.data_dir / "files")      # CR78: files from/for TBClients
+        self.file_loading: dict[str, dict] = {}
         self.images.store.purge()
         # name, locator, home BBS - own and of the others (CR73)
         self.profiles = Profiles(self)
@@ -474,6 +478,19 @@ class ClientCore:
         """CR78: a picture to the TBClient in channel ch (the reference as a chat line)."""
         chan = self.channels.get(ch)
         return chan.peer.img.send(data, blurhash, caption) if chan and chan.peer else None
+
+    def peer_file(self, ch: int, name: str, data: bytes) -> bool:
+        """CR78: offer a file to the TBClient in channel ch (packing in a thread)."""
+        chan = self.channels.get(ch)
+        if chan is None or chan.peer is None or not chan.peer.files.ok \
+                or not data or len(data) > peerfile.FILE_MAX:
+            return False
+        asyncio.ensure_future(chan.peer.files.send(name, data))
+        return True
+
+    def peer_file_get(self, ch: int, hash: str) -> bool:
+        chan = self.channels.get(ch)
+        return chan is not None and chan.peer is not None and chan.peer.files.fetch(hash)
 
     def peer_image_get(self, ch: int, hash: str) -> bool:
         chan = self.channels.get(ch)
@@ -1263,7 +1280,11 @@ class ClientCore:
         c = self.channels.get(ch) if ch else None
         if c is None or c.peer is None or self.peerchat is None or not c.peer.hist:
             return None
-        return {"v": self.peerchat.version, "msgs": self.peerchat.messages(c.peer.call)}
+        msgs = self.peerchat.messages(c.peer.call)
+        refs = {r[0] for r in (peerfile.parse_ref(m["text"]) for m in msgs) if r}
+        return {"v": self.peerchat.version, "msgs": msgs,
+                "files": {"have": sorted(h for h in refs if self.files.has(h)),
+                          "loading": {h: v for h, v in self.file_loading.items() if h in refs}}}
 
     def _term_n_of(self, ch: int | None) -> int:
         if ch == 0:

@@ -22,6 +22,10 @@ Their lines start with // and never show up as text in the terminal:
     //HEARD <call>=<min> ...        answer: up to 10 stations, minutes ago
                                     ("//HEARD -" = nobody)
 
+Clock: //TB? and //TB CLIENT carry t=<unix time> of the sender; the other side
+shows how far the two clocks are apart (a few seconds are the air time).
+Pictures: peerimg.py, files: peerfile.py.
+
 The other side's version is compared with the own one: a newer client over
 there is mentioned in the terminal.
 
@@ -52,6 +56,7 @@ from prcore import aprs, linkq
 from prcore import profile as pf
 
 from .peerchat import new_gen
+from .peerfile import PeerFiles
 from .peerimg import PeerImages
 
 from . import VERSION
@@ -59,17 +64,17 @@ from . import VERSION
 if TYPE_CHECKING:
     from .channels import Channel
 
-PEER_CAPS = ("PROF", "HEARD", "HIST", "IMG")
+PEER_CAPS = ("PROF", "HEARD", "HIST", "IMG", "FILE")
 HEARD_MAX = 10              # stations in one //HEARD line
 RESEND_MAX = 10             # lines sent again at most (//HM); more missing = both delete
 
 
 def probe_line() -> str:
-    return f"//TB? CLIENT v={VERSION} caps={','.join(PEER_CAPS)}"
+    return f"//TB? CLIENT v={VERSION} caps={','.join(PEER_CAPS)} t={int(time.time())}"
 
 
 def answer_line() -> str:
-    return f"//TB CLIENT v={VERSION} caps={','.join(PEER_CAPS)}"
+    return f"//TB CLIENT v={VERSION} caps={','.join(PEER_CAPS)} t={int(time.time())}"
 
 
 def _args(text: str) -> dict[str, str]:
@@ -92,6 +97,10 @@ class Peer:
         a = _args(args)
         self.ch = ch
         self.version = a.get("v", "")[:20]
+        # clock: their time when they sent the line - ours now; the line took a
+        # moment on the air, so a few seconds are no difference (CLOCK_SAME)
+        t = a.get("t", "")
+        self.clock_off = int(t) - int(time.time()) if t.isdigit() else None
         self.caps = {c.strip().upper() for c in a.get("caps", "").split(",") if c.strip()}
         self.prof: dict | None = None
         self.heard: list[tuple[str, int]] | None = None   # (call, minutes ago)
@@ -102,6 +111,7 @@ class Peer:
         self.q_none = False                 # the link gives no counters (Direwolf without fork)
         self._snap: tuple[int, str] | None = None   # own sent stream when //HIST went out
         self.img = PeerImages(self)          # pictures straight from the sender (peerimg.py)
+        self.files = PeerFiles(self)         # files, LZHUF (peerfile.py)
 
     @property
     def newer(self) -> bool:
@@ -250,6 +260,9 @@ class Peer:
         elif word in ("IMG", "I", "NOIMG"):
             if not self.img.take(word, rest):
                 return False
+        elif word in ("FGET", "F", "NOFILE"):
+            if not self.files.take(word, rest):
+                return False
         else:
             return False
         self.ch.core._touch()
@@ -324,7 +337,8 @@ class Peer:
     def summary(self, now: float) -> dict:
         return {"v": self.version, "newer": self.newer, "caps": sorted(self.caps),
                 "prof": self.profile_row(), "heard": self.heard, "heard_at": self.heard_at,
-                "hist": self.hist, "img": self.img.ok, "q": self.quality_summary(now)}
+                "hist": self.hist, "img": self.img.ok, "file": self.files.ok,
+                "clock": self.clock_off, "q": self.quality_summary(now)}
 
 
 def _dir(deg: float) -> str:

@@ -148,6 +148,7 @@ class Channel:
             self.outstanding = None
             if self.peer is not None:
                 self.peer.img.link_lost()           # CR78: a picture on its way
+                self.peer.files.link_lost()
             if self._detect_task:
                 self._detect_task.cancel()
             if prev != "offline":

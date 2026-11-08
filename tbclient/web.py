@@ -50,6 +50,9 @@ Images in the chat (CR12):
   POST /api/image/retry                       send a failed upload again
   POST /api/image/dismiss                     take the finished/failed upload off the GUI
   GET  /img/<hash>                            the image file (WebP or JPEG)
+  GET  /file/<hash>/<name>                    CR78: a file from/for a TBClient (download)
+  POST /api/peer/file  {"ch", "name", "data"}  CR78: offer a file (base64, max 64 KB)
+  POST /api/peer/fileget {"ch", "hash"}      CR78: fetch a file from the TBClient that offered it
 """
 
 from __future__ import annotations
@@ -61,11 +64,11 @@ import logging
 import re
 import time
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from tinybox import connlog                # CSV and ADIF of the connection log (CR44)
 
-from . import VERSION
+from . import VERSION, peerfile
 from .core import ClientCore
 
 log = logging.getLogger(__name__)
@@ -229,6 +232,16 @@ class WebServer:
                 h = core.peer_image(ch if isinstance(ch, int) else 0, raw,
                                     str(data.get("blurhash", "")), str(data.get("caption", "")))
                 return (200, {"ok": True, "hash": h}, None) if h else (400, {"ok": False}, None)
+            elif path == "/api/peer/file":         # CR78: {"ch", "name", "data"} - offer a file
+                try:
+                    raw = base64.b64decode(str(data.get("data", "")), validate=True)
+                except (ValueError, TypeError):
+                    return 400, {"error": "bad data"}, None
+                ch = data.get("ch")
+                ok = core.peer_file(ch if isinstance(ch, int) else 0, str(data.get("name", "")), raw)
+            elif path == "/api/peer/fileget":      # CR78: {"ch", "hash"} - fetch from the sender
+                ch = data.get("ch")
+                ok = core.peer_file_get(ch if isinstance(ch, int) else 0, str(data.get("hash", "")))
             elif path == "/api/peer/imgget":       # CR78: {"ch", "hash"} - fetch from the sender
                 ch = data.get("ch")
                 ok = core.peer_image_get(ch if isinstance(ch, int) else 0, str(data.get("hash", "")))
@@ -276,6 +289,15 @@ class WebServer:
             return (200 if ok else 400), {"ok": ok}, None
         if method != "GET":
             return 405, {"error": "method"}, None
+        if path.startswith("/file/"):                # CR78: /file/<hash>/<name> - download
+            h, _, name = path[6:].partition("/")
+            data = core.files.get(h)
+            if data is None:
+                return 404, {"error": "not found"}, None
+            fname = peerfile.safe_name(unquote(name))
+            return 200, data, "application/octet-stream", {
+                "Content-Disposition": f'attachment; filename="{fname}"',
+                "X-Content-Type-Options": "nosniff"}
         if path.startswith("/img/"):                 # CR12: a fetched or sent image
             data = core.images.store.get(path[5:])
             if data is None:

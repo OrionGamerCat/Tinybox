@@ -2329,11 +2329,24 @@ freischalten.
   TinyBox-Bilder in `data/tbclient/images/`.
 - Test: `tests/test_peerchat.py` (`test_picture_between_clients`).
 
+### Stufe 7: Dateien und Uhrzeit (Client 2026.11.08.4, `tbclient/peerfile.py`)
+
+- **Dateien** (Knopf 📎, höchstens 64 KB): wie die Bilder – der Sender behält die Datei
+  (`data/tbclient/files/<hash>`), über Funk geht nur die Chat-Zeile
+  `~%<hash> <bytes> <bytes on air> <name>` (im Verlauf beider Seiten). Der andere sieht Name,
+  Größe und Zeit auf Funk und holt sie per Antippen: `//FGET <hash>` →
+  `//F <hash> <z|r> <n>` + n Bytes bzw. `//NOFILE <hash>`. `z` = LZHUF (B0), `r` = roh, wenn LZHUF
+  nichts bringt (ZIP, JPEG). Der Hash geht über die Datei selbst, der Empfänger prüft nach dem
+  Entpacken. Nur an die Station, der sie angeboten wurde. Danach „Save“ (Download
+  `/file/<hash>/<name>`, Name entschärft). Packen im Thread (64 KB ≈ 0,3 s).
+- **Uhrzeit:** `//TB?` und `//TB CLIENT` tragen `t=<Unix-Zeit>`. Die Karte zeigt „🕒 clocks agree“
+  (bis 10 s, die Zeile war ja kurz unterwegs) oder „their clock is 3 min ahead/behind“, ab einer
+  Minute als orangefarbener Chip.
+- Test: `tests/test_peerchat.py` (`test_file_between_clients`).
+
 ### Später (eigene Stufen)
 
 - Reaktionen auf Blasen in der TBClient-Ansicht.
-- Direkte Nachricht/Datei mit LZHUF.
-- Uhrzeitabgleich.
 
 ## Kanal-Maximum in `tbclient.conf` (✅ 07.11.2026, zu CR45)
 
