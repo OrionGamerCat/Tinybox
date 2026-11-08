@@ -1,7 +1,7 @@
 # TinyBox-Client – Change Requests
 
 Gesammelt beim ersten Test PC1 ↔ PC2 (OE3GAS, OE3TEC) am 09.10.2026, ergänzt laufend.
-Stand: 08.11.2026 (CR83 umgesetzt)
+Stand: 08.11.2026 (CR84 umgesetzt)
 
 ## Übersicht
 
@@ -62,6 +62,7 @@ Stand: 08.11.2026 (CR83 umgesetzt)
 | 79 | APRS-Statistik: Netzgraph (Bubbles, Knoten, Wege) mit Filter nach Paketart, Geräte-Torte | ✅ Stufe 1 siehe unten (Stufe 2 offen) |
 | 82 | TinyBox: Sysop-Befehl `RELOAD` – `tinybox.conf` neu einlesen, ohne die User zu trennen | ✅ siehe unten |
 | 83 | TinyBox-Web-GUI: Frame-Monitor auch im AGW-Mode – gehörte Frames (Stufe 1) und eigene gesendete Frames über den Direwolf-Fork (Stufe 2) | ✅ siehe unten (Funktest offen) |
+| 84 | Kommentar auf eine Nachricht aus der History: Text statt „message #n“ | ✅ siehe unten (Funktest offen) |
 
 ## CR2 – Emojis (erledigt 11.10.2026)
 
@@ -2667,3 +2668,29 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
 - Tests: `tests/test_agw_monitor.py` (einmal `k`/`O` je Connect, RX-Frames, anderer Kanal
   ignoriert, TX-Frames mit Fork, Zähler, UI-Zeile ausgeblendet).
 - Funktest auf der Hinteralm offen: neue `direwolf-tinybox.exe` und `git pull` + `RESTART` der TinyBox.
+
+## CR84 – Zitat aus der History: Text statt „message #n“ (✅ 08.11.2026, Funktest offen)
+
+### Erfassung (OE3GAS, 08.11.2026)
+
+- Ein Kommentar (CR31, `~^5 …`) auf eine Nachricht, die der Client nur aus der History hat,
+  zeigt „↩ message #5“. Stattdessen soll der Text der Nachricht stehen, sofern sie noch in der
+  History ist.
+
+### Umsetzung (TinyBox + Client 2026.11.08.11)
+
+- Ursache: Ein Kommentar verweist nur auf die **Ereignisnummer** (`#5`, 0–255 je Board). Die
+  History-Zeilen (`//H <unix> <call>: <text>`) hatten keine Nummer, der Client konnte das Zitat
+  dort nicht finden.
+- **TinyBox:** `chat_lines` bekommt die Spalte `seq` (Schema 10, alte Zeilen `NULL`); die Zeile
+  wird jetzt nach dem Verteilen mit ihrer Nummer gespeichert. Neue Fähigkeit **`HSEQ`**:
+  Clients damit bekommen `//H <unix> #<n hex> <call>: <text>`, ältere wie bisher (sie würden die
+  Zeile sonst verwerfen).
+- **Client:** meldet `HSEQ`, merkt sich die Nummer einer History-Zeile als `qseq`; die Suche nach
+  dem zitierten Beitrag (`quotedMessage`) nimmt auch History-Zeilen mit dieser Nummer – wie bei
+  Live-Zeilen die neueste vor dem Kommentar.
+- Grenzen: Zeilen, die vor diesem Stand gespeichert wurden, haben keine Nummer (weiter
+  „message #n“). Nach einem TinyBox-Neustart beginnen die Nummern wieder bei 0 – dann gewinnt
+  wie bisher der neueste passende Beitrag vor dem Kommentar.
+- Tests: `test_clientproto.ClientProtoTests.test_history_with_event_numbers`,
+  `test_tbclient…test_history_event_number`.

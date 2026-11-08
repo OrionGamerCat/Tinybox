@@ -140,6 +140,30 @@ class ClientProtoTests(unittest.TestCase):
         type_lines(c, "//HIST max=x")
         self.assertIn("//ERR hist", ct.take())
 
+    def test_history_with_event_numbers(self):
+        """HSEQ: //H lines carry the event number, so a quote finds its line."""
+        term, tt = login(self.app, "OE3XYZ")
+        type_lines(term, "C TREFF", "eins", "zwei", "/Q")
+        c, ct = login(self.app, "OE3GAS")
+        type_lines(c, f"//CLIENT TB1 v={clientnews.client_version()} caps=CHAT,HSEQ")
+        ct.take()
+        type_lines(c, "C 1")
+        ct.take()
+        type_lines(c, "//HIST max=5")
+        out = ct.take().split("\r")
+        self.assertRegex(out[0], r"^//H \d+ #[0-9A-F]{1,2} OE3XYZ: eins$")
+        n1 = int(out[0].split()[2][1:], 16)
+        n2 = int(out[1].split()[2][1:], 16)
+        self.assertEqual((n1 + 1) % 256, n2)
+        # without HSEQ the old form (older clients would drop the line otherwise)
+        d, dt = login(self.app, "OE1ABC")
+        type_lines(d, f"//CLIENT TB1 v={clientnews.client_version()} caps=CHAT")
+        dt.take()
+        type_lines(d, "C 1")
+        dt.take()
+        type_lines(d, "//HIST max=5")
+        self.assertRegex(dt.take().split("\r")[0], r"^//H \d+ OE3XYZ: eins$")
+
     def test_symbol_change_at_once(self):
         """CR7: a new APRS symbol reaches the board at once, terminals get nothing."""
         term, tt = login(self.app, "OE3XYZ")

@@ -90,8 +90,14 @@ def _epoch(iso: str) -> int:
 HIST_CLIENT = "2026.10.11.3"
 
 
-def history_rows(lines) -> list[str]:
-    return [f"//H {_epoch(c.created)} {c.call}: {c.text}" for c in lines]
+def history_rows(lines, seq: bool = False) -> list[str]:
+    """//H lines. seq (client cap HSEQ): with the event number of the line,
+    "//H <unix> #<n hex> <call>: <text>" - so a client shows the text of a quote
+    ("~^5 ...") whose line it has only from the history. Lines stored before
+    schema 10 have no number and come without it."""
+    return [f"//H {_epoch(c.created)} "
+            + (f"#{c.seq:X} " if seq and c.seq is not None else "")
+            + f"{c.call}: {c.text}" for c in lines]
 
 
 def _board_lines(s: Session, board: ChatBoard) -> list[str]:

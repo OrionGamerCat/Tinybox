@@ -136,7 +136,7 @@ class ClientCore:
         self.channel_busy_at = 0.0                # last frame not between us and the TinyBox
         self.unwrap = proto.Unwrapper()
         self.seen: set[int] = set()
-        self._hist_buf: list[tuple[int, str, str]] | None = None   # //H lines of a //HIST
+        self._hist_buf: list[tuple] | None = None   # //H lines of a //HIST (time, call, text, seq)
         self._hist_older = False                  # the running //HIST asks for older lines
         self._hist_lo = self._hist_hi = 0         # orders history lines of the same second
         self._hist_keys: set[tuple] = set()       # (time, call, text) already shown
@@ -624,14 +624,16 @@ class ClientCore:
             self.board["motd"] = ""
             self._send("//MOTD")
 
-    def _add_history(self, lines: list[tuple[int, str, str]], older: bool) -> None:
+    def _add_history(self, lines: list[tuple], older: bool) -> None:
         """History lines (oldest first) into the chat. Ordered by time, always before
         the live events (ids >= 0); within the same second an older page goes in
         front of what is shown, a newer one behind it."""
         new = []
         for x in lines:                          # inclusive limits: drop what is here
-            if x not in self._hist_keys:
-                self._hist_keys.add(x)
+            if len(x) == 3:
+                x = (*x, None)
+            if x[:3] not in self._hist_keys:     # (time, call, text), with or without number
+                self._hist_keys.add(x[:3])
                 new.append(x)
         lines = new
         if older:
@@ -640,10 +642,13 @@ class ClientCore:
         else:
             k0 = self._hist_hi
             self._hist_hi += len(lines)
-        for i, (t, call, text) in enumerate(lines):
-            self._add({"id": -(2 ** 50) + t * 1000 + k0 + i, "seq": -1, "kind": "line",
-                       "call": call, "text": text, "time": t - self.clock_off,
-                       "history": True, "srv_time": t, "reactions": {}})
+        for i, (t, call, text, qseq) in enumerate(lines):
+            m = {"id": -(2 ** 50) + t * 1000 + k0 + i, "seq": -1, "kind": "line",
+                 "call": call, "text": text, "time": t - self.clock_off,
+                 "history": True, "srv_time": t, "reactions": {}}
+            if qseq is not None:
+                m["qseq"] = qseq                 # its event number: quotes find it (HSEQ)
+            self._add(m)
 
     def _ask_history(self, n: int, since: int | None = None, before: int | None = None) -> None:
         self.board["loading"] = True
@@ -778,7 +783,7 @@ class ClientCore:
         self.handshake_done = True          # sent; //OK confirms the caps
         self.chan.mode = "tinybox"
         caps = "CHAT,UI" if self._want_ui() else "CHAT"
-        caps += ",SYNC,SYNC2,SHORT,NUM,HAVE,PROF" + (",Z,IMG" if self.link.kind != "telnet" else "")
+        caps += ",SYNC,SYNC2,SHORT,NUM,HAVE,PROF,HSEQ" + (",Z,IMG" if self.link.kind != "telnet" else "")
         sym = f" sym={self.my_symbol}" if self.my_symbol else ""
         self._send(f"//CLIENT {PROTO} v={VERSION} caps={caps}{sym}")
 
@@ -934,9 +939,11 @@ class ClientCore:
                     self.tset["board"] = self.board["n"]
                     self._save_settings()
         elif cmd == "H":
-            m = re.match(r"^(\d+) ([A-Z0-9-]+): ?(.*)$", rest)
+            # HSEQ: "//H <unix> #<n> <call>: <text>" - the event number for quotes
+            m = re.match(r"^(\d+) (?:#([0-9A-F]{1,2}) )?([A-Z0-9-]+): ?(.*)$", rest)
             if m and self.board:
-                line = (int(m.group(1)), m.group(2), m.group(3))
+                line = (int(m.group(1)), m.group(3), m.group(4),
+                        int(m.group(2), 16) if m.group(2) else None)
                 if self._hist_buf is not None:
                     self._hist_buf.append(line)          # answer to //HIST: until //HEND
                 else:

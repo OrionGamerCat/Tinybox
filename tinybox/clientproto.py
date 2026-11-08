@@ -66,6 +66,11 @@ the chat events (+n call, -n, =n, %n b) and the %Q statistics line (CR33);
 SHORT = //SYNC knows short=<bytes>: only personal mail up to that size comes
 with its text, everything else only as a header (CR40).
 
+HSEQ = //H history lines carry the event number of the line:
+    //H <unix> #<n hex> <call>: <text>
+so a comment "~^5 ..." finds its quoted line also in the history (lines
+stored before schema 10 come without a number).
+
 PROF = profiles (CR73): name, locator and home BBS of a station, one per call
 without SSID (prcore/profile.py has the line format). //OK then tells
 prof=<crc> (4 hex digits) or prof=- (no profile stored here); the client
@@ -95,7 +100,8 @@ if TYPE_CHECKING:
     from .session import Session
 
 PROTO = "TB1"
-KNOWN_CAPS = ("CHAT", "UI", "SYNC", "SYNC2", "Z", "IMG", "NUM", "SHORT", "HAVE", "PROF")
+KNOWN_CAPS = ("CHAT", "UI", "SYNC", "SYNC2", "Z", "IMG", "NUM", "SHORT", "HAVE", "PROF",
+              "HSEQ")
 IMG_COMMANDS = ("IMGPUT", "IMG")
 # APRS symbol: table ('/', '\' or an overlay 0-9/A-Z) + symbol code (any printable)
 SYMBOL_RE = re.compile(r"^[/\\0-9A-Z][!-~]$")
@@ -284,7 +290,7 @@ def _hist(s: Session, parts: list[str]) -> None:
     lines, older = hub.history_page(board, int(args["max"]),
                                     after_iso=_iso(args.get("since", "")),
                                     before_iso=_iso(args.get("before", "")))
-    s.out(*history_rows(lines), f"//HEND {len(lines)} {older}")
+    s.out(*history_rows(lines, seq="HSEQ" in s.client.caps), f"//HEND {len(lines)} {older}")
 
 
 def _symbol(s: Session, parts: list[str]) -> None:

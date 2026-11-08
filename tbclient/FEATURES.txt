@@ -142,6 +142,9 @@ Zuletzt dazugekommen
   "*** OE1ABC is sending a picture (5.0 KB)".
 - Kommentare treffen jetzt immer den richtigen Beitrag: ueber Funk geht die
   Nummer des Beitrags (5 Byte statt 14) statt Rufzeichen und Minute.
+  Auch ein Beitrag, den man nur aus der History hat, wird gefunden: die
+  TinyBox schickt die History-Zeilen mit ihrer Nummer (HSEQ) - statt
+  "message #5" steht dann der Text da (fuer Zeilen ab 08.11.2026).
 - Bilder im Chat: ein Knopf neben den Emojis, das Bild wird im Browser
   klein gemacht (WebP, Wahl klein/normal/gross = 108/192/320 px,
   2 KB/4 KB/Limit der TinyBox, Standard 8 KB) und geht einmal zur TinyBox,

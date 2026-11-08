@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 9   # 4: chat_lines; 5: forwarding fields, bids, fwd_queue; 6: fwd_partial
+SCHEMA_VERSION = 10  # 4: chat_lines; 5: forwarding fields, bids, fwd_queue; 6: fwd_partial
                      # 7: seq/cseq + sync_gone (delta sync of the client, CR26)
                      # 8: chat_images (small images in the chat, CR12)
                      # 9: profiles (name, locator, home BBS of a station, CR73)
+                     # 10: chat_lines.seq (event number, so a quote finds its history line)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS messages (
@@ -95,7 +96,8 @@ CREATE TABLE IF NOT EXISTS chat_lines (               -- only boards with histor
     board   TEXT NOT NULL,
     call    TEXT NOT NULL,
     text    TEXT NOT NULL,
-    created TEXT NOT NULL                             -- ISO 8601 UTC
+    created TEXT NOT NULL,                            -- ISO 8601 UTC
+    seq     INTEGER                                   -- event number #n (0..255), NULL = before schema 10
 );
 CREATE INDEX IF NOT EXISTS chat_lines_board ON chat_lines (board, created);
 CREATE TABLE IF NOT EXISTS chat_images (              -- small chat images (CR12), one per hash
@@ -189,6 +191,7 @@ class ChatLine:
     call: str
     text: str
     created: str
+    seq: int | None = None              # event number #n, None = not known (old rows)
 
 
 @dataclass
@@ -218,6 +221,9 @@ class Store:
             if col not in cols:
                 self._db.execute(f"ALTER TABLE messages ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
         self._db.execute("CREATE UNIQUE INDEX IF NOT EXISTS messages_bid ON messages (bid)")
+        # 9 -> 10: event number of a chat line (a quote "~^5" finds it in the history)
+        if "seq" not in {r["name"] for r in self._db.execute("PRAGMA table_info(chat_lines)")}:
+            self._db.execute("ALTER TABLE chat_lines ADD COLUMN seq INTEGER")
         # 6 -> 7: change counter for the delta sync; old rows count as changed "at
         # their number", the counter starts above the highest number
         for col in ("seq", "cseq"):
@@ -475,16 +481,17 @@ class Store:
 
     # --- chat -----------------------------------------------------------
 
-    def chat_add(self, board: str, call: str, text: str, created: str) -> None:
+    def chat_add(self, board: str, call: str, text: str, created: str,
+                 seq: int | None = None) -> None:
         with self._db:
             self._db.execute(
-                "INSERT INTO chat_lines (board, call, text, created) VALUES (?, ?, ?, ?)",
-                (board, call, text, created))
+                "INSERT INTO chat_lines (board, call, text, created, seq) VALUES (?, ?, ?, ?, ?)",
+                (board, call, text, created, seq))
 
     def chat_recent(self, board: str, since_iso: str, limit: int) -> list[ChatLine]:
         """The newest `limit` lines since `since_iso`, oldest first."""
         rows = self._db.execute(
-            "SELECT board, call, text, created FROM chat_lines"
+            "SELECT board, call, text, created, seq FROM chat_lines"
             " WHERE board = ? AND created >= ? ORDER BY id DESC LIMIT ?",
             (board, since_iso, limit)).fetchall()
         return [ChatLine(**dict(r)) for r in reversed(rows)]
@@ -510,7 +517,7 @@ class Store:
             where += " AND created <= ?"
             args.append(before_iso)
         rows = self._db.execute(
-            f"SELECT id, board, call, text, created FROM chat_lines WHERE {where}"
+            f"SELECT id, board, call, text, created, seq FROM chat_lines WHERE {where}"
             " ORDER BY id DESC LIMIT ?", (*args, limit)).fetchall()
         if rows:
             older = self._db.execute(
@@ -523,8 +530,8 @@ class Store:
                 (board, since_iso, *([before_iso] if before_iso else []))).fetchone()[0]
             if after_iso:        # nothing new since then: everything stored is "older"
                 older = self.chat_stats(board, since_iso)[0]
-        lines = [ChatLine(board=r["board"], call=r["call"], text=r["text"], created=r["created"])
-                 for r in reversed(rows)]
+        lines = [ChatLine(board=r["board"], call=r["call"], text=r["text"], created=r["created"],
+                          seq=r["seq"]) for r in reversed(rows)]
         return lines, older
 
     def chat_purge(self, keep: dict[str, str]) -> int:

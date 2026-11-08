@@ -1,0 +1,3 @@
+- Kommentar auf eine Nachricht aus der History zeigt
+  jetzt deren Text statt "message #5" (braucht TinyBox
+  mit HSEQ, gilt fuer neue Chatzeilen).

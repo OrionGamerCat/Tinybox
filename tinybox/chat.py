@@ -249,14 +249,14 @@ class ChatHub:
         if board is None:
             return
         now = utc_now()
-        if not board.live:
-            self.store.chat_add(board.name, session.call, text, now)
         # terminals read "[Image ...]" and the quoted line instead of the bare
         # references (CR12, CR31)
         self._deliver(board.name, f"{session.call}: {text}",
                       texts.CHAT_LINE.format(call=session.call,
                                              text=self.readable(board.name, text)),
                       sender=session)
+        if not board.live:            # with its event number: quotes find it later (HSEQ)
+            self.store.chat_add(board.name, session.call, text, now, self._seq.get(board.name))
         self.bus.publish("chat.message", board=board.name, call=session.call,
                          text=text, created=now)
 

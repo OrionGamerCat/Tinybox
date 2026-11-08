@@ -268,7 +268,7 @@ class EndToEndTests(unittest.TestCase):
                 self.assertFalse(core.sync.start("bulletins"))       # one at a time
                 await until(lambda: not core.sync.running, 30)
                 self.assertEqual(core.sync.status["error"], "")
-                self.assertIn("*** client mode, caps: CHAT,HAVE,IMG,NUM,PROF,SHORT,SYNC,SYNC2,UI,Z", core.console)
+                self.assertIn("*** client mode, caps: CHAT,HAVE,HSEQ,IMG,NUM,PROF,SHORT,SYNC,SYNC2,UI,Z", core.console)
                 await until(lambda: core.state == "offline")
                 inbox = box.folder("inbox")
                 self.assertEqual([m["subject"] for m in inbox],

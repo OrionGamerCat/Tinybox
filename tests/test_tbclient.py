@@ -280,6 +280,24 @@ class HistoryOnRequestTests(unittest.TestCase):
         core.state, core.caps = "online", {"CHAT"}
         return core, sent
 
+    def test_history_event_number(self):
+        """HSEQ: a history line keeps its event number (qseq) for quotes."""
+        async def scenario():
+            with tempfile.TemporaryDirectory() as tmp:
+                core, sent = self.make(tmp)
+                now = int(time.time())
+                core._control(f"//IN 1 TREFF 7d 5 hist=2 last=1000 now={now}")
+                core._control("//H 990 #5 OE3TEC: mit Nummer")
+                core._control("//H 1000 OE3TEC: ohne Nummer")
+                core._control("//H 990 OE3TEC: mit Nummer")         # same line again: once
+                core._control("//HEND 2 0")
+                hist = [m for m in core.messages if m.get("history")]
+                self.assertEqual([(m["text"], m.get("qseq")) for m in hist],
+                                 [("mit Nummer", 5), ("ohne Nummer", None)])
+                self.assertTrue(all(m["seq"] == -1 for m in hist))  # still history
+
+        asyncio.run(scenario())
+
     def test_join_modes(self):
         async def scenario():
             with tempfile.TemporaryDirectory() as tmp:
@@ -355,7 +373,7 @@ class EndToEndTests(unittest.TestCase):
                 await asyncio.wait_for(core.link.agw_up.wait(), 5)
                 await core.connect()
                 await until(lambda: core.boards, 10)
-                self.assertEqual(core.caps, {"CHAT", "UI", "SYNC", "SYNC2", "SHORT", "Z", "IMG", "NUM", "HAVE", "PROF"})
+                self.assertEqual(core.caps, {"CHAT", "UI", "SYNC", "SYNC2", "SHORT", "Z", "IMG", "NUM", "HAVE", "PROF", "HSEQ"})
                 self.assertTrue(core.join(1))
                 await until(lambda: core.board and "OE3GAS" in core.members)
                 self.assertEqual(core.members, {"OE3XYZ": "", "OE3GAS": "/-"})
@@ -420,7 +438,7 @@ class EndToEndTests(unittest.TestCase):
                 self.assertEqual((await http("POST", "/api/connect", headers=False))[0], 403)
                 self.assertEqual((await http("POST", "/api/connect"))[0], 200)
                 await until(lambda: core.boards, 10)
-                self.assertEqual(core.caps, {"CHAT", "SYNC", "SYNC2", "SHORT", "NUM", "HAVE", "PROF"})   # telnet: no UI, no Z
+                self.assertEqual(core.caps, {"CHAT", "SYNC", "SYNC2", "SHORT", "NUM", "HAVE", "PROF", "HSEQ"})   # telnet: no UI, no Z
                 await http("POST", "/api/join", {"board": 2})
                 await until(lambda: core.board is not None)
                 await http("POST", "/api/say", {"text": "per telnet ~01"})

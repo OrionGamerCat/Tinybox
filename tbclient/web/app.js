@@ -741,7 +741,9 @@ function quotedMessage(q, before) {
     if (x === before) break;
     if (x.kind !== "line" && x.kind !== undefined) continue;
     if (q.seq !== undefined) {
-      if (x.seq === q.seq) hit = x;        // CR31: unique, the newest one before us
+      // CR31: unique, the newest one before us; a line from the history carries
+      // its number as qseq (TinyBox with HSEQ)
+      if (x.seq === q.seq || (x.history && x.qseq === q.seq)) hit = x;
       continue;
     }
     if (x.call !== q.call || !x.text) continue;      // old lines: call and minute
