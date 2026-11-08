@@ -2461,3 +2461,42 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   Knöpfen, die Werte darunter), wie heute.
 - Größe des Speed tests: **1024 Bytes** je Richtung (OE3GAS 08.11.2026, Client 2026.11.08.9;
   vorher 2048). Die Bestätigung nennt dann ca. 10 s je Richtung bei 1200 Bd.
+
+## CR81 – Schiffe versenken zwischen zwei TBClients (offen, 08.11.2026)
+
+### Erfassung (OE3GAS, 08.11.2026)
+
+- „Schiffe versenken“ als Spiel Client zu Client, wie Schach (CR78 Stufe 8).
+- Frage an Claude: andere geeignete Spiele.
+
+### Vorschlag zur Umsetzung (Claude)
+
+- **Regeln:** 10 × 10 Felder (A–J, 1–10), Flotte 5 – 4 – 3 – 3 – 2, Schiffe gerade, dürfen
+  sich nicht berühren. Wer trifft, schießt noch einmal (Variante, beim Start wählbar?).
+- **Protokoll** (Zeilen mit `//`, nichts im Chat-Verlauf außer Start und Ergebnis, Fähigkeit
+  `FUN` wie bei Schach):
+  - `//BS NEW <hash>` – lädt ein, `<hash>` = sha1 über die eigene Aufstellung + Zufallswert
+  - `//BS OK <hash>` – nimmt an, mit dem Hash der eigenen Aufstellung
+  - `//BS F E5` – Schuss
+  - `//BS R E5 miss|hit|sunk 3` – Antwort
+  - `//BS END <aufstellung> <salt>` – am Ende legen beide offen. Der andere prüft den Hash und
+    jede Antwort im Spiel. Wer geschummelt hat, steht dann im Ergebnis („board does not match“).
+  - `//BS RESIGN`
+- Ein Zug sind rund 15 Bytes, ein ganzes Spiel unter 3 kB über Funk.
+- **Ansicht:** zwei Raster nebeneinander (eigene Flotte, Schüsse auf den anderen), Aufstellen
+  per Klick oder „random“; „your move“ pulsierend in der rechten Spalte (CR80).
+- Spiel je Gegenstation in den Settings, geht nach Neustart oder neuem Connect weiter.
+
+### Weitere Spiele (Ideen, noch nicht entschieden)
+
+- Ein gemeinsamer Rahmen `//G <spiel> …` für alle weiteren Spiele: Einladung, Zug, Aufgabe,
+  Speichern, „your move“ – ein neues Spiel bringt nur seine Regeln (in der Web-GUI) mit.
+- **Vier gewinnt** – ein Zeichen je Zug, schnell, kennt jeder.
+- **Mühle** – klassisch, wenige Züge, kurze Nachrichten.
+- **Reversi (Othello)** – 8 × 8, ein Feld je Zug.
+- **Dame** – wie Schach, einfachere Regeln.
+- **Mastermind** – Geheimcode mit Hash wie bei Schiffe versenken.
+- **Würfelspiele (Kniffel)** – faire Würfel ohne Schiedsrichter: beide schicken zuerst den Hash
+  einer Zufallszahl, dann die Zahl; der Wurf kommt aus beiden zusammen.
+- Funkerisch: **Locator-Raten** – die Gegenstation nennt ein gehörtes Rufzeichen, man tippt
+  dessen Locator, Punkte nach Entfernung.
