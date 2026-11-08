@@ -88,7 +88,7 @@ async def run(cfg: config.Config, control: logsetup.LogControl,
         app.axudp = axudp.AxudpAdapter(app)
         tasks.append(asyncio.create_task(app.axudp.run()))
     if cfg.beacon.enabled:
-        tasks.append(asyncio.create_task(app.beacon.run()))
+        app.beacon_task = asyncio.create_task(app.beacon.run())
     app.update = release.UpdateNotice(app)        # PLANUNG 24: new release on GitHub
     if cfg.update.check:
         tasks.append(asyncio.create_task(app.update.run()))
@@ -111,6 +111,8 @@ async def run(cfg: config.Config, control: logsetup.LogControl,
         await app.stop_event.wait()
         await close_sessions(app)
     finally:
+        if app.beacon_task is not None:            # CR82: RELOAD may start / stop it
+            tasks.append(app.beacon_task)
         for task in tasks:
             task.cancel()
         for server in servers:

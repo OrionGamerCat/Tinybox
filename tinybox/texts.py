@@ -229,6 +229,8 @@ HELP_CONSOLE = [
     "  SHUTDOWN CANCEL  Call off a pending shutdown",
     "  RESTART [s]    Restart TinyBox (e.g. after changing tinybox.conf) in s",
     "                 seconds (default 60), users are warned; NOW, CANCEL as above",
+    "  RELOAD         Read tinybox.conf again WITHOUT disconnecting anybody: takes",
+    "                 over what may change at runtime, lists what needs a RESTART",
 ]
 UPDATE_ASKING = "Asking GitHub for the newest release ..."
 UPDATE_UNKNOWN = "Update: no answer from GitHub (offline?)."
@@ -283,6 +285,7 @@ RESTART_SCHEDULED = ("Restart in {sec} s, {n} station(s) warned. "
                      "RESTART CANCEL calls it off.")
 RESTART_BAD_CONFIG = "tinybox.conf has an error, NOT restarted: {error}"
 RESTART_CONFIG_OK = "tinybox.conf checked: OK."
+RELOAD_BAD_CONFIG = "tinybox.conf has an error, nothing changed: {error}"
 FWD_OFF = "Forwarding is off ([forward] enabled = no)."
 FWD_START = "Connecting to {call} ..."
 FWD_DONE = "Forward {call}: {result}"

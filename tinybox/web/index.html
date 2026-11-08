@@ -26,6 +26,7 @@
   </div>
   <div class="who">
     <span>Sysop <strong class="mono" id="hdr-sysop">-</strong></span>
+    <button class="btn" id="btn-reload" type="button" title="Read tinybox.conf again without disconnecting anybody (only what may change at runtime)">Reload</button>
     <button class="btn" id="btn-restart" type="button" title="Restart TinyBox, e.g. after changing tinybox.conf">Restart</button>
     <button class="btn danger" id="btn-shutdown" type="button">Shutdown</button>
   </div>
@@ -48,6 +49,11 @@
   <main id="main"></main>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
+<dialog id="reload-dlg" class="reload-dlg">
+  <h2>Reload tinybox.conf</h2>
+  <pre id="reload-out" class="mono"></pre>
+  <form method="dialog"><button class="btn primary sm" type="submit">OK</button></form>
+</dialog>
 <div id="stopped" hidden>
   <div class="stopped-box">
     <h1 id="stopped-title">TinyBox has been stopped.</h1>

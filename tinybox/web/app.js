@@ -1348,7 +1348,7 @@ function viewSettings() {
   main().className = "one";
   main().replaceChildren(
     h("section", { class: "card" }, h("div", { class: "card-body note" },
-      "Read-only. Edit ", file, " and restart TinyBox to change settings.")),
+      "Read-only. Edit ", file, ", then Reload (no disconnect, runtime values) or Restart.")),
     grid);
   api("config").then((cfg) => {
     file.textContent = cfg.file;
@@ -1456,7 +1456,19 @@ async function shutdown(restart) {
   } catch (e) { toast(e.message, true); }
 }
 
+// CR82: tinybox.conf again without disconnecting anybody, the list in a dialog.
+async function reloadConf() {
+  try {
+    const r = await api("reload", {});
+    $("reload-out").textContent = r.lines.join("\n");
+    $("reload-dlg").showModal();
+    await refreshStatus();
+    if (location.hash.startsWith("#/settings")) route();
+  } catch (e) { toast(e.message, true); }
+}
+
 async function init() {
+  $("btn-reload").addEventListener("click", reloadConf);
   $("btn-shutdown").addEventListener("click", () => shutdown(false));
   $("btn-restart").addEventListener("click", () => shutdown(true));
   window.addEventListener("hashchange", route);

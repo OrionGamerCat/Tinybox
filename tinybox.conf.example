@@ -179,7 +179,7 @@ RUNDE = live  Live round, nothing is stored
 
 [chat_motd]
 # Message of the day per board (optional), shown when entering it. Max 120
-# characters, no # or ; (they start a comment). Change: edit + RESTART.
+# characters, no # or ; (they start a comment). Change: edit + RELOAD (or RESTART).
 # The client fetches the text only when it changed.
 #TREFF = Welcome! Net every Sunday 19:00 local on this frequency.
 
@@ -194,7 +194,7 @@ RUNDE = live  Live round, nothing is stored
 # the sysop is free. TBNEWS (client news) is a system rubric, never for users.
 # A partner mailbox offering an unknown rubric: the first bulletin is kept held
 # and the sysop gets a mail, further ones wait; enter the rubric here as
-# accepted or refused and RESTART.
+# accepted or refused and RELOAD (or RESTART).
 # The accepted rubrics (with description) also go to brocastd with every full
 # sync; brocastd sends them as the station's rubric index page, so listeners
 # know new rubrics before the first page and drop removed ones (PLANUNG 6f).

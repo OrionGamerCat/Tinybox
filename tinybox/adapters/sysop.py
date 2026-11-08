@@ -1,7 +1,7 @@
 """Local sysop console in the TinyBox window.
 
 All mailbox commands work here with sysop rights (L, R, K, E, S, SB ...),
-plus console commands: W, MON, LOG, DISC, STATUS, SHUTDOWN, RESTART.
+plus console commands: W, MON, LOG, DISC, STATUS, SHUTDOWN, RESTART, RELOAD.
 Input comes from a background thread reading the keyboard, so the
 mailbox keeps running while the sysop types.
 """
@@ -377,6 +377,17 @@ class SysopConsole:
                              restart=True)
         self.out(texts.RESTART_SCHEDULED.format(sec=sec, n=users))
 
+    def cmd_reload(self, arg: str) -> None:
+        """RELOAD (CR82): tinybox.conf again, without disconnecting anybody. Only what
+        may change at runtime is taken over, the rest is listed for a RESTART."""
+        from .. import reload
+        try:
+            res = reload.reload(self.app)
+        except config.ConfigError as exc:
+            self.out(texts.RELOAD_BAD_CONFIG.format(error=exc))
+            return
+        self.out(*res.lines())
+
     def cmd_beacon(self, arg: str) -> None:
         """BEACON: send the beacon now and show it (CR48)."""
         from ..beacon import Beacon, beacon_text
@@ -443,4 +454,5 @@ class SysopConsole:
         "REL": cmd_rel,
         "SHUTDOWN": cmd_shutdown,
         "RESTART": cmd_restart,
+        "RELOAD": cmd_reload,
     }

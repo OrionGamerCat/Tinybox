@@ -385,3 +385,10 @@ legend { padding: 0; margin-bottom: 8px; }
   .chan .kvs { grid-template-columns: 1fr; }
 }
 
+/* CR82: result of Reload */
+.reload-dlg { max-width: min(760px, calc(100vw - 32px)); border: 1px solid var(--ink); padding: 18px 20px;
+  color: var(--ink); background: var(--paper); }
+.reload-dlg h2 { margin: 0 0 10px; font-size: 18px; }
+.reload-dlg pre { margin: 0 0 14px; font-size: 13px; line-height: 1.45; white-space: pre-wrap;
+  overflow-wrap: anywhere; max-height: 60vh; overflow: auto; }
+.reload-dlg form { text-align: right; }

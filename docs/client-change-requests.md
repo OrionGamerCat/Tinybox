@@ -1,7 +1,7 @@
 # TinyBox-Client – Change Requests
 
 Gesammelt beim ersten Test PC1 ↔ PC2 (OE3GAS, OE3TEC) am 09.10.2026, ergänzt laufend.
-Stand: 08.11.2026 (CR82 erfasst)
+Stand: 08.11.2026 (CR82 umgesetzt)
 
 ## Übersicht
 
@@ -60,7 +60,7 @@ Stand: 08.11.2026 (CR82 erfasst)
 | 53 | TinyBox-Web-GUI: Monitor auf schwarzem Hintergrund (wie im Client) | ✅ siehe unten |
 | 73 | Benutzerprofil: Name, Locator, Home-BBS in TinyBox und Client (Terminal-Fragen, Formular im Client, `//PROF`, `//WHOIS`) | ✅ siehe unten (Funktest offen) |
 | 79 | APRS-Statistik: Netzgraph (Bubbles, Knoten, Wege) mit Filter nach Paketart, Geräte-Torte | ✅ Stufe 1 siehe unten (Stufe 2 offen) |
-| 82 | TinyBox: Sysop-Befehl `RELOAD` – `tinybox.conf` neu einlesen, ohne die User zu trennen | offen, siehe unten |
+| 82 | TinyBox: Sysop-Befehl `RELOAD` – `tinybox.conf` neu einlesen, ohne die User zu trennen | ✅ siehe unten |
 
 ## CR2 – Emojis (erledigt 11.10.2026)
 
@@ -2521,7 +2521,7 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
 - Funkerisch: **Locator-Raten** – die Gegenstation nennt ein gehörtes Rufzeichen, man tippt
   dessen Locator, Punkte nach Entfernung.
 
-## CR82 – TinyBox: `RELOAD` – Konfiguration neu einlesen ohne Disconnect (offen, 08.11.2026)
+## CR82 – TinyBox: `RELOAD` – Konfiguration neu einlesen ohne Disconnect (✅ 08.11.2026)
 
 ### Erfassung (OE3GAS, 08.11.2026)
 
@@ -2551,7 +2551,7 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   Nichts geändert: `RELOAD: no changes`. Passwörter und Token nur als `(changed)`, nie im Klartext.
   Dieselbe Liste geht ins Log. Ignorierte Werte wirken beim nächsten `RESTART` (der liest die
   Datei ohnehin neu).
-- **Wo:** überall, wo es `RESTART` gibt – lokale Konsole, Sysop über Telnet bzw. Funk, Sysop-Web-GUI
+- **Wo:** überall, wo es `RESTART` gibt – lokale Sysop-Konsole und Sysop-Web-GUI
   (Knopf neben Restart, Liste als Antwort).
 - **Live-fähig (Entwurf, beim Einbauen Abschnitt für Abschnitt prüfen):**
   - `[station]` sysop_call, sysop_via_radio, haddress, qth, freq, locator
@@ -2576,3 +2576,27 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   - `[storage]`, `[logging]` log_dir, `[inbox]` enabled/directory, `[forward]` enabled/listen_*,
     `[chat]` enabled
 - Unbekannte oder veraltete Schlüssel: wie beim Start als Hinweis (CR70) mit ausgeben.
+
+### Umsetzung (08.11.2026)
+
+- `tinybox/reload.py`: liest die Datei mit `config.load()` (Fehler → nichts geändert), vergleicht
+  Feld für Feld und ändert die **laufenden Konfigurationsobjekte an Ort und Stelle** – alle Teile, die
+  eine Referenz darauf halten (Sessions, Chat, Forward, brocast, Bake …), sehen die neuen Werte sofort.
+  Die Regeln stehen oben in der Datei (`LIVE`).
+- Was beim Start kopiert wurde, wird nachgezogen: `max_users` in der Session-Liste, Log-Level und
+  `debug` in den Log-Filtern, `keep_days`, Locator für die Entfernung im APRS-Monitor, eigene Adresse
+  im Forward-Router; Forward-Scheduler wird geweckt, bei geänderten Rubriken werden zurückgehaltene
+  Bulletins wie beim Start entschieden; `[beacon] enabled` startet bzw. stoppt die Bake, ein neues
+  `interval_min` startet sie neu (erste Bake nach `first_after_sec`).
+- Gegenüber dem Entwurf **nur mit RESTART**: `[station] sysop_call` (die Konsole läuft unter diesem
+  Call), alle `[agw]`-Werte inklusive `quality_*` (die Linkqualität rechnet je Verbindung mit den
+  Werten vom Verbindungsaufbau), `[logging] monitor`, `[brocast] publish`, `[update] check`.
+- Chat-Boards: neue Boards kommen **ans Ende** (die Nummern der anderen bleiben, die Clients kennen
+  sie als `TBCHAT-n`), geänderte Boards (Haltezeit, Beschreibung, noimg, MOTD) sofort. Gelöschte
+  Boards und eine neue Reihenfolge: „needs RESTART“.
+- Forward-Partner: neu, geändert, entfernt sofort; eine laufende Forward-Session arbeitet mit den
+  alten Werten zu Ende. Partner-`password` und `login` erscheinen nur als `(changed)`, ebenso Token.
+- Ignorierte Werte bleiben auf dem alten Stand und stehen bei jedem weiteren `RELOAD` wieder in der
+  Liste, bis ein `RESTART` sie übernimmt. Die Liste geht auch ins Log.
+- Sysop-Konsole `RELOAD` (Hilfe ergänzt), Sysop-Web-GUI Knopf **Reload** (Ergebnis im Dialog),
+  `POST /api/reload`. Tests: `tests/test_reload.py`.

@@ -440,6 +440,15 @@ class WebServer:
                 if app.stop_event is not None:
                     asyncio.get_running_loop().call_later(0.3, app.stop_event.set)
                 return {"ok": True, "delay": 0}
+            if parts == ["reload"]:                              # CR82: no disconnect
+                from .. import reload
+                try:
+                    res = reload.reload(app)
+                except config.ConfigError as exc:
+                    raise HttpError(400, f"tinybox.conf has an error, nothing changed: {exc}")
+                log.info("reload requested from web GUI")
+                return {"ok": True, "lines": res.lines(),
+                        "changed": len(res.changed), "ignored": len(res.ignored)}
             if parts == ["monitor", "clear"]:                    # CR52: Clear for all tabs
                 self.hub.backlog.clear()
                 return {"ok": True}

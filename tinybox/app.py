@@ -29,9 +29,11 @@ class App:
     forward: Any = None                  # ForwardModule, only with [forward] enabled = yes
     shutdown: Any = None                 # ShutdownTimer (SHUTDOWN with warning)
     restart: bool = False                # stop for a restart (RESTART), not for good
-    config_path: str | None = None       # tinybox.conf, checked again before RESTART
+    config_path: str | None = None       # tinybox.conf, checked again before RESTART / RELOAD
     log_control: Any = None              # logsetup.LogControl for the LOG command (CR32)
     update: Any = None                   # release.UpdateNotice (PLANUNG 24)
+    beacon: Any = None                   # beacon.Beacon (CR48)
+    beacon_task: Any = None              # its task while [beacon] enabled (RELOAD starts/stops it)
 
     @classmethod
     def create(cls, cfg: Config, db_path: str | None = None) -> "App":

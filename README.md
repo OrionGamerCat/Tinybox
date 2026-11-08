@@ -220,6 +220,7 @@ Im TinyBox-Fenster tippen. Es gelten alle Mailbox-Befehle mit Sysop-Rechten
 | `SHUTDOWN NOW` | Sofort beenden (Benutzer werden verabschiedet) |
 | `SHUTDOWN CANCEL` | Angekündigten Shutdown absagen, die Stationen werden informiert |
 | `RESTART [s]` | TinyBox neu starten, z. B. nach einer Änderung in `tinybox.conf` oder einem `git pull`. Prüft zuerst `tinybox.conf` – bei einem Fehler wird nicht neu gestartet. Warnung an die Stationen wie bei `SHUTDOWN` (Standard 60 s, `NOW`, `CANCEL`). Mit `tinybox.bat` / `tinybox_dauerbetrieb.bat` startet TinyBox im selben Fenster sofort wieder |
+| `RELOAD` | `tinybox.conf` neu einlesen, **ohne** jemanden zu trennen (CR82). Übernimmt nur, was im laufenden Betrieb geht (Mailbox-Werte, Bake, Log-Level, Rubriken, neue/geänderte Chat-Boards und MOTD, brocast, Forward-Partner …) und listet danach die geänderten Werte und die ignorierten, die einen `RESTART` brauchen (Rufzeichen, Funk/AGW/KISS, Ports, Adapter ein/aus, gelöschte Boards). Bei einem Fehler in der Datei wird nichts geändert. In der Sysop-Web-GUI: Knopf **Reload** |
 
 Nachricht beenden mit `/EX`. Log-Meldungen und Monitor erscheinen
 zwischen den Eingaben – das ist normal.
