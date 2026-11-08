@@ -2468,6 +2468,11 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
 
 - „Schiffe versenken“ als Spiel Client zu Client, wie Schach (CR78 Stufe 8).
 - Frage an Claude: andere geeignete Spiele.
+- Entscheidung Prüfung am Ende (OE3GAS, 08.11.2026): **behalten**, als stille Hintergrund-
+  Kontrolle. Schummeln ist kaum zu erwarten (dafür müsste jemand den Code ändern), sie findet aber
+  auch Fehler, etwa einen auseinandergelaufenen Spielstand nach Neustart oder verlorener Zeile.
+  Im Spiel merkt man nichts davon; nur wenn etwas nicht stimmt, steht „board does not match“ im
+  Ergebnis.
 
 ### Vorschlag zur Umsetzung (Claude)
 
@@ -2479,8 +2484,9 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   - `//BS OK <hash>` – nimmt an, mit dem Hash der eigenen Aufstellung
   - `//BS F E5` – Schuss
   - `//BS R E5 miss|hit|sunk 3` – Antwort
-  - `//BS END <aufstellung> <salt>` – am Ende legen beide offen. Der andere prüft den Hash und
-    jede Antwort im Spiel. Wer geschummelt hat, steht dann im Ergebnis („board does not match“).
+  - `//BS END <aufstellung> <salt>` – am Ende legen beide offen (rund 100 Bytes). Der Client
+    des anderen prüft still den Hash und jede Antwort im Spiel; nur bei einer Abweichung steht
+    „board does not match“ im Ergebnis.
   - `//BS RESIGN`
 - Ein Zug sind rund 15 Bytes, ein ganzes Spiel unter 3 kB über Funk.
 - **Ansicht:** zwei Raster nebeneinander (eigene Flotte, Schüsse auf den anderen), Aufstellen
