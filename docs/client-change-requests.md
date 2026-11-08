@@ -1,7 +1,7 @@
 # TinyBox-Client – Change Requests
 
 Gesammelt beim ersten Test PC1 ↔ PC2 (OE3GAS, OE3TEC) am 09.10.2026, ergänzt laufend.
-Stand: 08.11.2026 (CR82 umgesetzt)
+Stand: 08.11.2026 (CR83 erfasst)
 
 ## Übersicht
 
@@ -61,6 +61,7 @@ Stand: 08.11.2026 (CR82 umgesetzt)
 | 73 | Benutzerprofil: Name, Locator, Home-BBS in TinyBox und Client (Terminal-Fragen, Formular im Client, `//PROF`, `//WHOIS`) | ✅ siehe unten (Funktest offen) |
 | 79 | APRS-Statistik: Netzgraph (Bubbles, Knoten, Wege) mit Filter nach Paketart, Geräte-Torte | ✅ Stufe 1 siehe unten (Stufe 2 offen) |
 | 82 | TinyBox: Sysop-Befehl `RELOAD` – `tinybox.conf` neu einlesen, ohne die User zu trennen | ✅ siehe unten |
+| 83 | TinyBox-Web-GUI: Frame-Monitor auch im AGW-Mode – gehörte Frames (Stufe 1) und eigene gesendete Frames über den Direwolf-Fork (Stufe 2) | offen, siehe unten |
 
 ## CR2 – Emojis (erledigt 11.10.2026)
 
@@ -2600,3 +2601,49 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   Liste, bis ein `RESTART` sie übernimmt. Die Liste geht auch ins Log.
 - Sysop-Konsole `RELOAD` (Hilfe ergänzt), Sysop-Web-GUI Knopf **Reload** (Ergebnis im Dialog),
   `POST /api/reload`. Tests: `tests/test_reload.py`.
+
+## CR83 – Frame-Monitor auch im AGW-Mode (offen, 08.11.2026)
+
+### Erfassung (OE3GAS, 08.11.2026)
+
+- Auf der Hinteralm (OE3GAS-1, AGW-Mode mit Direwolf) zeigt der Live-Monitor der TinyBox die
+  Frames nicht, die Direwolf im Fenster zeigt: RR-Quittungen der eigenen Verbindungen
+  (`OE3GAS-1>OE3TEC:(RR cmd …)`), fremde UI-Frames (`OE3GAS-12>CQ:test`), fremde Verbindungen
+  (OE3OGC ↔ OE3GAS-10). Im Monitor stehen nur Sitzungstext (`TXT`), eigene UI-Frames und Log.
+- Grund: Den Frame-Monitor (`tinybox/framemon.py`, CR52) gibt es nur im KISS-Mode. Im AGW-Mode
+  macht Direwolf AX.25 und meldet der TinyBox weder gehörte noch eigene Frames.
+- Entscheidung (OE3GAS, 08.11.2026): **beide Stufen** aufnehmen.
+
+### Stufe 1 – gehörte Frames (nur TinyBox)
+
+- Nach dem Verbinden mit Direwolf einmal AGW **`k`** schicken („raw frames on“). Direwolf
+  schickt dann jeden **empfangenen** Frame als `K`: ein Byte Port/TNC, danach der Frame ohne FCS.
+- Achtung: `k` ist bei Direwolf ein **Umschalter** – nur einmal pro AGW-Verbindung senden (nach
+  einem Reconnect wieder einmal).
+- Die Bytes ab dem zweiten gehen in `framemon.emit(data, tx=False, mycall=…)` wie im KISS-Mode:
+  RX-Zeilen mit I-, S-, U-Frames, Zählern, P/F, APRS-Lens, HEX-Inspektor. Modulo 128 aus der
+  Verbindung (die Verbindungen kennt die TinyBox über AGW) oder geschätzt wie bisher.
+- Nur wenn die Web-GUI läuft (der Logger `tinybox.frames` hat sonst keinen Handler – dann
+  nichts aufbauen, wie in `framemon`), nicht in Logdatei oder Konsole.
+- Damit sieht der Sysop alles, was auf dem Kanal gehört wird, auch die Frames der Gegenstationen
+  an die TinyBox (RR von OE3TEC usw.). Was fehlt: die eigenen gesendeten Frames außer UI.
+- Die eigenen UI-Frames, die heute als Log-Zeile `UI …` erscheinen, bleiben so (bis Stufe 2).
+- Ein Original-Direwolf kann Stufe 1 auch – sie braucht den Fork nicht.
+
+### Stufe 2 – eigene gesendete Frames (Direwolf-Fork + TinyBox)
+
+- Direwolf meldet über AGW von den eigenen Frames nur UI (`T` im Monitor-Format,
+  `server_send_monitored(…, own_xmit=1)` in `src/xmit.c`). I-, S-, U-Frames der TinyBox
+  (I, RR, REJ, UA, DISC …) sieht kein AGW-Client.
+- **Fork** (oe3gas/direwolf-tinybox, Zweig `tinybox`): in `xmit.c` jeden gesendeten Frame
+  zusätzlich **roh** an die AGW-Clients geben, die `k` eingeschaltet haben – als eigener neuer
+  Frame-Typ (Vorschlag **`k`-Antwort `X`**? besser ein freier Buchstabe, z. B. **`O`** = „own“),
+  Aufbau wie `K`: ein Byte Port, danach der Frame ohne FCS. Ein eigener Typ, damit Clients, die
+  nur das Original kennen, nichts falsch als empfangen deuten. Kein Protokollverhalten ändert sich
+  (Grundsatz des Forks). Dokumentation in `TINYBOX.md`.
+- Gemeldet wird beim **tatsächlichen Senden** (nach Kanalzugang/TXDELAY), damit die Zeit stimmt
+  und Wiederholungen als eigene Zeilen erscheinen.
+- **TinyBox:** `O`-Frames in `framemon.emit(data, tx=True, …)` → TX-Zeilen wie im KISS-Mode. Ist
+  Stufe 2 aktiv (erstes `O` gesehen oder Fork per Startmeldung erkannt), entfallen die bisherigen
+  Log-Zeilen `UI …` für eigene UI-Frames im Monitor, damit nichts doppelt steht.
+- Mit einem Original-Direwolf bleibt es bei Stufe 1.
