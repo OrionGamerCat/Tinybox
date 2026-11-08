@@ -1188,7 +1188,7 @@ function blurCanvas(bh, cls, bytes) {
 
 /* The image part of a bubble: the picture if it is here, else the blurred
  * placeholder with size, load time and the state of a running download. */
-function imageBlock(ref, own) {
+function imageBlock(ref, own, get) {   // get: how to fetch it (CR78: from a TBClient)
   const box = el("div", "imgbox");
   const I = S.images || { have: [], loading: {} };
   if (I.have.includes(ref.hash)) {
@@ -1217,7 +1217,7 @@ function imageBlock(ref, own) {
   }
   box.append(ov);
   if (!ld || ld.error) {
-    box.onclick = (ev) => { ev.stopPropagation(); api("image/get", { hash: ref.hash }); };
+    box.onclick = (ev) => { ev.stopPropagation(); (get || (() => api("image/get", { hash: ref.hash })))(); };
   } else box.onclick = (ev) => ev.stopPropagation();
   return box;
 }
@@ -1357,15 +1357,16 @@ async function pickImageSize(size) {
   if (imgFile) await shrinkForDialog();
 }
 async function chooseImage(file) {
-  if (!file || !S || !S.board || !S.board.img) return;
+  if (!file || !S) return;
+  if (view !== "peer" && !(S.board && S.board.img)) return;   // CR78: to a TBClient always
   imgFile = file; imgAspect = null;
-  $("imgdlg-caption").value = $("input").value;
+  $("imgdlg-caption").value = view === "peer" ? $("term-input").value : $("input").value;
   $("imgdlg").classList.remove("hidden");
   imgSizeButtons();
   await shrinkForDialog();
 }
 async function shrinkForDialog() {
-  const file = imgFile, limit = S.board.img || IMG_SHRINK_MAX;
+  const file = imgFile, limit = (S.board && S.board.img) || IMG_SHRINK_MAX;
   const target = imgTarget(imgSize), px = IMG_SIZES[imgSize].px;
   $("imgdlg-text").textContent = "Shrinking the picture…";
   $("imgdlg-ok").disabled = true;
@@ -1390,6 +1391,14 @@ async function sendImage() {
   const buf = new Uint8Array(await imgPick.blob.arrayBuffer());
   let bin = "";
   for (let i = 0; i < buf.length; i += 4096) bin += String.fromCharCode(...buf.subarray(i, i + 4096));
+  if (view === "peer") {                          // CR78: straight to the TBClient
+    const bh = imgPick.bh;
+    closeImageDialog();
+    $("term-input").value = ""; peerHint();
+    const r = await postJson("peer/img", { ch: activeCh, data: btoa(bin), blurhash: bh, caption: wire });
+    if (!r.ok) { $("peer-hint").className = "hint"; $("peer-hint").textContent = "The picture was not accepted."; $("peer-hint").classList.remove("hidden"); }
+    return;
+  }
   const body = { data: btoa(bin), blurhash: imgPick.bh, caption: wire, quote: quotePrefix() };
   closeImageDialog();
   $("input").value = ""; updateHint();
@@ -1621,7 +1630,7 @@ function msgItem(m) {
   const left = el("span");
   left.append(el("span", "muted small", "#" + m.id + " "));
   if (!m.has_body) {                             // CR40: the text comes when clicked
-    const t = el("span", "tag notloaded", "not loaded · " + kbText(m.size));
+    const t = el("span", "tag notloaded", "not loaded · " + m.size + " bytes");
     t.title = "Click to fetch the text";
     left.append(t);
   }
@@ -2307,6 +2316,7 @@ function renderPeer(c, mon) {
   $("peer-heard").classList.toggle("hidden", !p || !on || !p.caps.includes("HEARD"));
   $("peer-clear").classList.toggle("hidden", !p || !p.hist || !pv);
   $("peer-emoji").classList.toggle("hidden", !pv);
+  $("peer-img").classList.toggle("hidden", !pv || !p || !p.img);
   if (!pv) { $("peer-picker").classList.add("hidden"); $("peer-hint").classList.add("hidden"); }
   $("peer-raw").classList.toggle("hidden", !p);
   $("peer-raw").textContent = pv ? "Terminal" : "TBClient view";
@@ -2386,7 +2396,14 @@ function peerQuality(q, c) {
 let peerChatKey = "";
 function peerBubble(kind, text, t) {
   const b = el("div", "pb " + kind);
-  b.append(el("div", "pb-t", wireToText(text) || " "), el("div", "pb-time", hhmm(t)));   // :-) -> emoji
+  const ref = imageRef(text);                     // CR78: a picture, fetched from the sender
+  if (ref) {
+    b.classList.add("pimg");
+    const ch = activeCh;
+    b.append(imageBlock(ref, kind === "tx", () => api("peer/imgget", { ch, hash: ref.hash })));
+    if (ref.caption) b.append(el("div", "pb-t", wireToText(ref.caption)));
+  } else b.append(el("div", "pb-t", wireToText(text) || " "));   // :-) -> emoji
+  b.append(el("div", "pb-time", hhmm(t)));
   return b;
 }
 
@@ -2395,7 +2412,8 @@ function renderPeerChat(lines) {
   const pc = S.peerchat;
   if (pc) {                                     // the stored history (both sides know HIST)
     const last = pc.msgs.length ? pc.msgs[pc.msgs.length - 1].id : 0;
-    const key = `${activeCh}:${pc.v}:${pc.msgs.length}:${last}`;
+    const I = S.images || {};
+    const key = `${activeCh}:${pc.v}:${pc.msgs.length}:${last}:${(I.have || []).length}:${JSON.stringify(I.loading || {})}`;
     if (key === peerChatKey && termShown >= 0) return;
     const first = termShown < 0 || !peerChatKey.startsWith(activeCh + ":");
     const atBottom = out.scrollTop + out.clientHeight >= out.scrollHeight - 40;
@@ -2793,6 +2811,7 @@ async function start() {
   $("peer-raw").onclick = peerToggle;
   $("peer-clear").onclick = peerClear;
   $("peer-emoji").onclick = peerPicker;
+  $("peer-img").onclick = () => $("imgfile").click();          // CR78: the same dialog
   $("term-input").addEventListener("input", (e) => {          // TBClient view: :-) -> emoji
     if (view !== "peer") return;
     if (e.inputType !== "deleteContentBackward") liveEmoticon(e.target);

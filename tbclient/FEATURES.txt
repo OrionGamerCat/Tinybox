@@ -25,6 +25,8 @@ Zuletzt dazugekommen
   (Standard 5), Alt+1 ... Alt+9.
 - Eingehender Connect (CR75): ruft uns eine Station an, schaltet die Web-GUI
   gleich auf diesen Kanal (Terminal, bei einem TBClient dessen Ansicht).
+- Bilder zwischen zwei TBClients (CR78): Knopf im TBClient-Chat, ueber Funk
+  nur der Verweis; der andere holt das Bild per Antippen beim Sender.
 - Emoticons in der TBClient-Ansicht: :-) wird zum Emoji, Emoji-Knopf; ueber
   Funk gehen sie als :-) bzw. ~XY wie im TinyBox-Chat.
 - Konsole im tbclient-Fenster: I / INFO zeigt den Startblock noch einmal

@@ -2292,6 +2292,7 @@ freischalten.
   der TBClient-Ansicht), neben „TBClient“ ein grüner Chip „connected to <call>“, in der
   Bulletin-/Mail-Liste „not loaded · Größe“ als orangefarbener Chip.
 - Umsetzung: `.st-chip.ok` / `.st-chip.warn` (`--ok`/`--warn`), `.tag.notloaded`.
+- 08.11.2026: Größe neben „not loaded“ in Bytes („not loaded · 512 bytes“).
 
 ### Bewertung bei wenigen Frames (07.11.2026, TinyBox und Client)
 
@@ -2313,10 +2314,24 @@ freischalten.
   zeigen es als Emoji. Die rohe Terminal-Ansicht zeigt die Funkform.
 - Ältere Clients (vor 2026.11.08.2) zeigen in ihrer Ansicht die Funkform `:-)`.
 
+### Stufe 6: Bilder (Client 2026.11.08.3, `tbclient/peerimg.py`)
+
+- Wie CR12, nur ohne TinyBox: Der Sender behält das Bild (verkleinert im Browser, derselbe
+  Dialog mit klein/normal/groß, höchstens 8 KB). Über Funk geht nur der Verweis
+  `~#<hash><größe><blurhash> Bildunterschrift` als Chat-Zeile – er steht im Verlauf beider Seiten.
+- Der andere sieht den unscharfen Platzhalter mit Größe und Ladezeit und holt das Bild **per
+  Antippen direkt beim Sender**: `//IMG <hash>` → `//I <hash> <offset> <gesamt>` + die Bytes am
+  Stück (das AX.25-Fenster regelt das Tempo) bzw. `//NOIMG <hash>`.
+- Ein Client gibt ein Bild nur der Station, der er es geschickt hat (Verweis in seinem
+  gesendeten Verlauf mit ihr).
+- Ein abgebrochener Download beginnt beim nächsten Antippen von vorn (Offset ist im Protokoll
+  vorgesehen). Beide brauchen die Fähigkeit `IMG`; nicht über Telnet. Ablage wie die
+  TinyBox-Bilder in `data/tbclient/images/`.
+- Test: `tests/test_peerchat.py` (`test_picture_between_clients`).
+
 ### Später (eigene Stufen)
 
 - Reaktionen auf Blasen in der TBClient-Ansicht.
-- Bilder direkt (CR12-Verfahren, binär).
 - Direkte Nachricht/Datei mit LZHUF.
 - Uhrzeitabgleich.
 

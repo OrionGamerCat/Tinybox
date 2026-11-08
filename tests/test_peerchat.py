@@ -11,6 +11,7 @@ import time
 import unittest
 from pathlib import Path
 
+from prcore import chatimg
 from tbclient import core as core_mod
 from tbclient import peerchat
 from tbclient.core import ClientCore
@@ -113,6 +114,47 @@ class PeerHistoryTests(unittest.TestCase):
                 sb.clear("OE3GAS", peerchat.new_gen())
                 await connect()
                 await until(lambda: sa.count("OE3TEC") == 0)
+                for t in tasks:
+                    t.cancel()
+            dw.server.close()
+        asyncio.run(scenario())
+
+    def test_picture_between_clients(self):
+        """CR78: the reference goes as a chat line, the bytes on a tap straight
+        from the sender - only to the station it was sent to."""
+        async def scenario():
+            dw = FakeDirewolf()
+            port = await dw.start()
+            with tempfile.TemporaryDirectory() as ta, tempfile.TemporaryDirectory() as tb:
+                a = ClientCore(client_cfg(ta, agw_port=port))
+                b = ClientCore(dataclasses.replace(client_cfg(tb, agw_port=port), mycall="OE3TEC"))
+                tasks = [asyncio.create_task(a.run()), asyncio.create_task(b.run())]
+                await asyncio.wait_for(a.port.agw_up.wait(), 5)
+                await asyncio.wait_for(b.port.agw_up.wait(), 5)
+                await until(lambda: len([c for c in dw.clients if c["calls"]]) == 2)
+                self.assertTrue(await b.connect("OE3GAS", ch=1))
+                await until(lambda: a.channels[1].peer is not None and b.channels[1].peer is not None)
+                await asyncio.sleep(0.2)
+                webp = b"RIFF\x20\x00\x00\x00WEBPVP8 " + bytes(range(256)) * 5
+                h = b.peer_image(1, webp, "BEHV6nWB2yk8pyo0", "vom Berg")
+                self.assertTrue(h)
+                line = f"~#{h}{chatimg.size_code(len(webp))}BEHV6nWB2yk8pyo0 vom Berg"
+                await until(lambda: a.peerchat.messages("OE3TEC")[-1:]
+                            and a.peerchat.messages("OE3TEC")[-1]["text"] == line)
+                self.assertFalse(a.images.store.has(h))
+                self.assertTrue(a.peer_image_get(1, h))
+                await until(lambda: a.images.store.has(h))
+                self.assertEqual(a.images.store.get(h), webp)
+                self.assertIn(h, a.snapshot(1)["images"]["have"])
+                # the bytes did not end up as chat lines
+                self.assertFalse(any("RIFF" in m["text"] for m in a.peerchat.messages("OE3TEC")))
+                # a picture never sent to them: refused
+                other = b"RIFF\x20\x00\x00\x00WEBPVP8 " + bytes(range(200))
+                oh = chatimg.image_hash(other)
+                b.images.store.put(oh, other)
+                self.assertTrue(a.peer_image_get(1, oh))
+                await until(lambda: a.images.loading.get(oh, {}).get("error"))
+                self.assertFalse(a.images.store.has(oh))
                 for t in tasks:
                     t.cancel()
             dw.server.close()

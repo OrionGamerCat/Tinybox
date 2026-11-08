@@ -52,13 +52,14 @@ from prcore import aprs, linkq
 from prcore import profile as pf
 
 from .peerchat import new_gen
+from .peerimg import PeerImages
 
 from . import VERSION
 
 if TYPE_CHECKING:
     from .channels import Channel
 
-PEER_CAPS = ("PROF", "HEARD", "HIST")
+PEER_CAPS = ("PROF", "HEARD", "HIST", "IMG")
 HEARD_MAX = 10              # stations in one //HEARD line
 RESEND_MAX = 10             # lines sent again at most (//HM); more missing = both delete
 
@@ -100,6 +101,7 @@ class Peer:
         self.q_at = 0                       # last counters (time), 0 = none yet
         self.q_none = False                 # the link gives no counters (Direwolf without fork)
         self._snap: tuple[int, str] | None = None   # own sent stream when //HIST went out
+        self.img = PeerImages(self)          # pictures straight from the sender (peerimg.py)
 
     @property
     def newer(self) -> bool:
@@ -245,6 +247,9 @@ class Peer:
             self._on_hist(rest)
         elif word == "HM":
             self._on_hm(rest)
+        elif word in ("IMG", "I", "NOIMG"):
+            if not self.img.take(word, rest):
+                return False
         else:
             return False
         self.ch.core._touch()
@@ -319,7 +324,7 @@ class Peer:
     def summary(self, now: float) -> dict:
         return {"v": self.version, "newer": self.newer, "caps": sorted(self.caps),
                 "prof": self.profile_row(), "heard": self.heard, "heard_at": self.heard_at,
-                "hist": self.hist, "q": self.quality_summary(now)}
+                "hist": self.hist, "img": self.img.ok, "q": self.quality_summary(now)}
 
 
 def _dir(deg: float) -> str:

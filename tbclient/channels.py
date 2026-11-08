@@ -146,6 +146,8 @@ class Channel:
             self.ended = {"kind": kind, "at": int(time.time()), "call": self.target}
             self._user_disc = False
             self.outstanding = None
+            if self.peer is not None:
+                self.peer.img.link_lost()           # CR78: a picture on its way
             if self._detect_task:
                 self._detect_task.cancel()
             if prev != "offline":

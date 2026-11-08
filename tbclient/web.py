@@ -16,6 +16,8 @@ API:
   POST /api/term   {"text": "...", "ch": n}   a raw line from the terminal view (CR43)
   POST /api/peer/heard {"ch": n}             CR78: ask the TBClient there whom it hears
   POST /api/peer/clear {"ch": n}             CR78: delete the chat history with it (both sides)
+  POST /api/peer/img   {"ch", "data", "blurhash", "caption"}  CR78: a picture to the TBClient
+  POST /api/peer/imgget {"ch", "hash"}       CR78: fetch a picture from the TBClient that sent it
   POST /api/ui     {"dest": "CQ", "via": "OE3XBS-8,WIDE2-1", "text": "..."}   one UI frame
                    from the monitor (CR66) -> {"ok": true} or {"ok": false, "error": "..."}
   POST /api/join   {"board": n}
@@ -218,6 +220,18 @@ class WebServer:
             elif path == "/api/term":              # CR43: a raw line from the terminal
                 ch = data.get("ch")
                 ok = core.send_raw(str(data.get("text", "")), ch if isinstance(ch, int) else None)
+            elif path == "/api/peer/img":          # CR78: {"ch", "data", "blurhash", "caption"}
+                try:
+                    raw = base64.b64decode(str(data.get("data", "")), validate=True)
+                except (ValueError, TypeError):
+                    return 400, {"error": "bad data"}, None
+                ch = data.get("ch")
+                h = core.peer_image(ch if isinstance(ch, int) else 0, raw,
+                                    str(data.get("blurhash", "")), str(data.get("caption", "")))
+                return (200, {"ok": True, "hash": h}, None) if h else (400, {"ok": False}, None)
+            elif path == "/api/peer/imgget":       # CR78: {"ch", "hash"} - fetch from the sender
+                ch = data.get("ch")
+                ok = core.peer_image_get(ch if isinstance(ch, int) else 0, str(data.get("hash", "")))
             elif path == "/api/peer/clear":        # CR78: {"ch": n} - delete the chat history
                 ch = data.get("ch")
                 ok = core.peer_clear(ch if isinstance(ch, int) else 0)

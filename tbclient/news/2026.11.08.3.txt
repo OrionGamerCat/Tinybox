@@ -1,0 +1,3 @@
+- Bilder zwischen zwei TBClients: Knopf im TBClient-Chat, der
+  andere laedt per Antippen direkt beim Sender.
+- not loaded zeigt die Groesse in Bytes.

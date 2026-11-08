@@ -470,6 +470,15 @@ class ClientCore:
             if changed:
                 self._touch()
 
+    def peer_image(self, ch: int, data: bytes, blurhash: str, caption: str) -> str | None:
+        """CR78: a picture to the TBClient in channel ch (the reference as a chat line)."""
+        chan = self.channels.get(ch)
+        return chan.peer.img.send(data, blurhash, caption) if chan and chan.peer else None
+
+    def peer_image_get(self, ch: int, hash: str) -> bool:
+        chan = self.channels.get(ch)
+        return chan is not None and chan.peer is not None and chan.peer.img.fetch(hash)
+
     def peer_heard(self, ch: int) -> bool:
         """CR78: ask the TBClient in channel ch whom it hears."""
         chan = self.channels.get(ch)
@@ -1186,14 +1195,20 @@ class ClientCore:
             # CR30: pictures other stations are sending right now
             "uploads": [{"call": c, "size": u["size"], "at": u["at"], "got": u["got"]}
                         for c, u in self.uploads.items()],
-            "images": self.images.status(self._image_refs()),
+            "images": self.images.status(self._image_refs(ch)),
             "img": {"rate": self.cfg.img_rate, "target": self.cfg.img_target},
             **self.profiles.snapshot(calls),                            # CR73
         }
 
-    def _image_refs(self) -> set[str]:
-        """Hashes of the images referred to in the chat shown right now."""
+    def _image_refs(self, ch: int | None = None) -> set[str]:
+        """Hashes of the images referred to in the chat shown right now - and in
+        the history with the TBClient of the channel shown (CR78)."""
         refs = set()
+        pc = self._peerchat_of(ch)
+        for m in (pc or {}).get("msgs", []):
+            r = chatimg.parse_ref(m["text"]) if m["text"].startswith("~#") else None
+            if r:
+                refs.add(r[0])
         for m in self.messages:
             if m.get("kind") == "line" and "~#" in (m.get("text") or ""):
                 r = chatimg.parse_ref(m["text"])

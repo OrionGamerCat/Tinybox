@@ -221,7 +221,14 @@ input { font: inherit; color: var(--text); background: var(--surface); border: 1
 .termview.peer .peer-picker { position: static; max-height: 240px; overflow-y: auto; border-top: 1px solid var(--line);
   margin: 0 max(14px, calc((100% - 760px) / 2)); }
 .termview.peer #peer-hint { margin: 0 max(14px, calc((100% - 760px) / 2)); }
-.termview.peer #peer-emoji { flex: none; }
+.termview.peer #peer-emoji, .termview.peer #peer-img { flex: none; }
+/* CR78: pictures in the TBClient view - the same box as in the chat */
+.termview.peer .pb.pimg { padding: 4px 4px 2px; }
+.termview.peer .pb.pimg .pb-t { padding: 2px 6px 0; }
+.termview.peer .imgbox { position: relative; width: fit-content; max-width: min(320px, 70vw); border-radius: 10px;
+  overflow: hidden; background: var(--line); cursor: pointer; }
+.termview.peer .imgbox img { display: block; max-width: 100%; height: auto; }
+.termview.peer .imgbox .blur { display: block; width: 192px; max-width: 100%; height: auto; filter: blur(1px); }
 /* CR78: own view for a TBClient on the other end */
 .peer-head { display: flex; gap: 12px; align-items: center; padding: 10px 14px; background: var(--surface);
   border-bottom: 1px solid var(--line); }
