@@ -75,9 +75,9 @@ button { font: inherit; color: inherit; }
             margin-left: 6px; }
 .nav .off { font-size: 11px; font-weight: 700; color: var(--danger); margin-left: 6px; }
 .count { font: 700 13px var(--mono); min-width: 28px; text-align: right; color: var(--ink-3); white-space: nowrap; }
-.count .u { color: var(--accent); }
-.count .u::after { content: " · "; color: var(--ink-3); }
-.nav.on .count, .nav.on .count .u { color: #fff; }
+.count .u { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px;   /* orange chip */
+            background: #C2410C; color: #fff; font: 700 12px var(--mono); vertical-align: 1px; }
+.nav.on .count { color: #fff; }
 .navhead { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3);
            padding: 14px 12px 6px; }
 .heard { font: 13px var(--mono); color: var(--ink-3); padding: 2px 12px; }

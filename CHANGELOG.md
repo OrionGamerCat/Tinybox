@@ -2,6 +2,7 @@
 
 ## Unveröffentlicht
 
+- brocast-Web-GUI: **„n neu“ als oranger Chip** neben den Rubriken und Stationen.
 - brocastd (Station): **Rücksicht auf den echten Verkehr** (`[traffic]`) – eine Seite beginnt
   erst, wenn der Kanal `quiet_s` ruhig war (nach Verbindungs-Frames `connected_quiet_s`). Die
   TinyBox meldet `PUT /busy`: Stufe 1 (Benutzer über Funk verbunden) nur neue Revisionen, kleine
