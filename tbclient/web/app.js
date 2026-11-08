@@ -2482,8 +2482,15 @@ function peerFunRow(f, c) {
   else if (f.pinging) res.push("ping ...");
   if (f.st) res.push(f.st.state === "done" ? `speed → ${f.st.out} B/s ← ${f.st.in} B/s`
     : `speed test running (${f.st.out ? "→ " + f.st.out + " B/s, " : ""}${f.st.n} bytes each way) ...`);
-  if (f.chess && f.chess.my_turn) res.push("♟ your move");
-  if (res.length) row.append(el("div", "ph-res", res.join(" · ")));
+  const move = f.chess && f.chess.my_turn;
+  if (res.length || move) {
+    const d = el("div", "ph-res", res.join(" · "));
+    if (move) {
+      if (res.length) d.append(" · ");
+      d.append(el("span", "ph-move", "♟ your move"));      // pulses black/white
+    }
+    row.append(d);
+  }
   return row;
 }
 

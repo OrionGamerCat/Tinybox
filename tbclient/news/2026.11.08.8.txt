@@ -1,0 +1,2 @@
+- TBClient-Ansicht: "your move" beim Schach blinkt
+  schwarz/weiss.

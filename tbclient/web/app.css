@@ -746,6 +746,11 @@ button.danger:hover { color: var(--bad); border-color: var(--bad); }
 /* CR78 stage 8: ping/speed/chess/QSL row, the small map, QSL card, chess board */
 .peer-head .ph-fun { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
 .peer-head .ph-res { flex-basis: 100%; color: var(--muted); }
+/* chess: your move - pulses black/white so it is not missed */
+.peer-head .ph-move { display: inline-block; padding: 1px 9px; border-radius: 10px; font-weight: 700;
+  border: 1.5px solid #111; animation: ph-move 1.2s ease-in-out infinite; }
+@keyframes ph-move { 0%, 100% { background: #111; color: #fff; } 50% { background: #fff; color: #111; } }
+@media (prefers-reduced-motion: reduce) { .peer-head .ph-move { animation: none; background: #111; color: #fff; } }
 .peer-head .ph-maplink { margin-left: auto; flex: none; }
 .peer-head .ph-map { width: 200px; height: 120px; display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
 .ph-map .g { stroke: var(--line); stroke-width: 1; }
