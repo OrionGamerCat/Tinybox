@@ -2459,4 +2459,5 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   aus 1200 Bd (≈ 20 s je Richtung bei 2048 Bytes).
 - Schmale Fenster / Handy: die rechte Spalte rutscht unter das Profil (eine Zeile mit den
   Knöpfen, die Werte darunter), wie heute.
-- Offen: Größe des Speed tests wählbar (512 / 1k / 2k), Standard 1k? (Frage an OE3GAS)
+- Größe des Speed tests: **1024 Bytes** je Richtung (OE3GAS 08.11.2026, Client 2026.11.08.9;
+  vorher 2048). Die Bestätigung nennt dann ca. 10 s je Richtung bei 1200 Bd.

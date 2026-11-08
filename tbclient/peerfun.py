@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .peer import Peer
 
-ST_BYTES = 2048
+ST_BYTES = 1024                 # 4-5 frames at paclen 256: one RR turnaround is in it (08.11.2026, was 2048)
 ST_MAX = 8192
 UCI_RE = re.compile(r"^[a-h][1-8][a-h][1-8][qrbn]?$")
 

@@ -1,0 +1,2 @@
+- TBClient Speed test: 1 kB je Richtung statt 2 kB
+  (halbe Kanalbelegung).

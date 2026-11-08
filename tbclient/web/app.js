@@ -2471,7 +2471,7 @@ function peerFunRow(f, c) {
   const fun = (act, arg) => api("peer/fun", { ch: activeCh, act, arg });
   row.append(
     btn("Ping", "Round trip time to the other station", () => fun("ping"), f.pinging),
-    btn("Speed test", "2 kB each way, net bytes per second", () => fun("speed"),
+    btn("Speed test", "1 kB each way, net bytes per second", () => fun("speed"),
         f.st && f.st.state === "running"),
     btn("♟ Chess", "Play chess over packet", () => { chessOpen = !chessOpen; render(); }),
     btn("QSL", "Send a digital QSL card (into the chat)", () => sendQsl(c)));
