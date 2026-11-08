@@ -2426,3 +2426,37 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
 - **Kanten nach Hop-Typ:** kräftig für einen Hop über WIDE1, blass für WIDE2-2-Fluten.
 - **Kanal-Health:** roter Rand an Digis, über die viele „unchanged repeats“ laufen (Sins).
 
+
+## CR80 – TBClient-Ansicht in drei Spalten, Aktionen rechts (offen, 08.11.2026)
+
+### Erfassung (OE3GAS, 08.11.2026)
+
+- Bei einem Connect mit einem anderen TBClient bekommt die Ansicht drei Spalten:
+  - links die Karten (Chat Boards, Mail, Bulletins, Station) wie bisher,
+  - in der Mitte das Dialogfenster (Profil, Linkqualität, Mini-Karte, Sprechblasen, Eingabe),
+  - rechts eine neue Spalte, so breit wie die linke.
+- In die rechte Spalte, untereinander: **Ping**, **Speed test**, **Chess**, **QSL**, dazu
+  **Heard there** und **Delete history**. In der Kopfzeile des Dialogs bleibt nur „Terminal“.
+- **Speed test:** vorher eine Bestätigung einholen. Der Benutzer soll wissen, dass nun beide
+  Stationen je ca. 20 s den Kanal belegen.
+- Wurde schon ein Speed test gemacht: der Wert neben dem Knopf (→ … B/s ← … B/s) und
+  „tested xx min ago“.
+- Ebenso der Wert des letzten Ping daneben, sonst „–“.
+- Entwurf: Design-Canvas „TBClient 3 Spalten“ (claude.ai) – Hauptansicht, Bestätigung,
+  Zustände der rechten Spalte (nichts / läuft / schon gemacht).
+
+### Vorschlag zur Umsetzung (Claude)
+
+- Rechte Spalte als zwei Karten im Stil der linken: „WITH <call>“ (Ping, Speed test, Chess, QSL)
+  und „CHANNEL“ (Heard there, Delete history – rot umrandet).
+- Unter jedem Knopf eine Ergebniszeile: Ping „1.8 s · 4 min ago“ bzw. „–“; Speed test Wert und
+  „tested 3 min ago“ bzw. „–“, beim Laufen ein Fortschrittsbalken; Chess „your move“ (pulsierend,
+  Client 2026.11.08.8) bzw. „waiting for <call>“; QSL „sent hh:mm“.
+- Ergebnisse von Ping und Speed test je Gegenstation in den Settings merken, damit „tested
+  xx min ago“ auch nach einem neuen Connect stimmt.
+- Bestätigung: Dialog „Start speed test with <call>?“ mit Datenmenge und letztem Ergebnis,
+  Knöpfe Cancel / Start test. Die Dauer rechnet der Client aus dem letzten Ergebnis, sonst
+  aus 1200 Bd (≈ 20 s je Richtung bei 2048 Bytes).
+- Schmale Fenster / Handy: die rechte Spalte rutscht unter das Profil (eine Zeile mit den
+  Knöpfen, die Werte darunter), wie heute.
+- Offen: Größe des Speed tests wählbar (512 / 1k / 2k), Standard 1k? (Frage an OE3GAS)
