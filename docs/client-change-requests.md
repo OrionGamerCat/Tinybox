@@ -2344,9 +2344,35 @@ freischalten.
   Minute als orangefarbener Chip.
 - Test: `tests/test_peerchat.py` (`test_file_between_clients`).
 
+### Stufe 8: Ping, Speedtest, Schach, QSL, Karte, Zustellhaken (Client 2026.11.08.5)
+
+Auf Vorschlag Claude, freigegeben von OE3GAS (08.11.2026). Fähigkeit `FUN`
+(`tbclient/peerfun.py`, `tbclient/web/chess.js`):
+
+- **Ping:** `//PING <token>` → `//PONG <token>`, Laufzeit hin und zurück (letzte 5) in der Karte.
+- **Speedtest:** ein Knopf, beide Richtungen: `//ST 2048 go` + 2048 Bytes → `//STR 2048 <ms>`, dann
+  `//ST 2048 back` + 2048 Bytes zurück. Der Empfänger misst von der Zeile bis zum letzten Byte;
+  Ergebnis „→ … B/s ← … B/s“ (4 KB auf Funk je Test).
+- **Schach:** `//CHESS NEW w|b`, `//CHESS M <uci>`, `//CHESS RESIGN`. Regeln (Zugerzeugung,
+  Schach, Rochade, en passant, Umwandlung in Dame, Matt/Patt) im Browser, `chess.js` – geprüft mit
+  Perft bis Tiefe 3 (8902). Der Client prüft nur, wer am Zug ist; die Partie liegt in den
+  Einstellungen je Station und geht nach Neustart/nächstem Connect weiter. Brett mit der eigenen
+  Farbe unten, Zug per Antippen; Hinweise im Verlauf („started a chess game“, „resigned“).
+- **QSL:** Knopf „QSL“ schickt eine Chat-Zeile `~Q f=<MHz> t=<UTC> loc=<Locator> q=<Balken>`; beide
+  Seiten zeigen eine QSL-Karte, „ADIF“ lädt den QSO-Eintrag (CALL, QSO_DATE, TIME_ON, FREQ,
+  MODE=PKT, GRIDSQUARE/MY_GRIDSQUARE, QSL_RCVD/QSL_SENT).
+- **Mini-Karte** in der Karte: beide Stationen aus den Locatoren, Linie, Locator-Gitter (2°×1°),
+  Norden oben, Entfernung und Richtung; Klick öffnet die Route bei OpenStreetMap. Ohne Kacheln,
+  nichts aus dem Netz.
+- **Zustellhaken:** Eigene Zeilen zeigen „·“ unterwegs und „✓“, sobald Direwolf/KISS nichts mehr
+  ausstehend meldet (Abfrage alle 3 s, nur Zeilen dieser Verbindung). Spalte `ok` in
+  `peerchat.db` (wird beim Start ergänzt).
+- Test: `tests/test_peerchat.py` (`test_ping_speed_chess_tick`).
+
 ### Später (eigene Stufen)
 
 - Reaktionen auf Blasen in der TBClient-Ansicht.
+- Sprachnachrichten mit Codec2 (WebAssembly im Browser, ~1,5 KB je 10 s) – eigenes Projekt.
 
 ## Kanal-Maximum in `tbclient.conf` (✅ 07.11.2026, zu CR45)
 

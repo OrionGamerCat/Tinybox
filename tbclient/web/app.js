@@ -2318,7 +2318,8 @@ function renderPeer(c, mon) {
   $("peer-emoji").classList.toggle("hidden", !pv);
   $("peer-img").classList.toggle("hidden", !pv || !p || !p.img);
   $("peer-file").classList.toggle("hidden", !pv || !p || !p.file);
-  if (!pv) { $("peer-picker").classList.add("hidden"); $("peer-hint").classList.add("hidden"); }
+  if (!pv) { $("peer-picker").classList.add("hidden"); $("peer-hint").classList.add("hidden");
+             $("peer-chess").classList.add("hidden"); }
   $("peer-raw").classList.toggle("hidden", !p);
   $("peer-raw").textContent = pv ? "Terminal" : "TBClient view";
   $("peer-head").classList.toggle("hidden", !p || !pv);
@@ -2359,12 +2360,15 @@ function renderPeerHead(c, p) {
     }
     info.append(row);
   }
+  if (p.fun) info.append(peerFunRow(p.fun, c));
   if (p.heard) {
     info.append(el("div", "ph-heard small", p.heard.length
       ? "Hears: " + p.heard.map(([call, m]) => `${call} (${m ? m + " min" : "now"})`).join(", ")
       : "Hears nobody yet"));
   }
-  head.replaceChildren(avatar(c.target, "", false), info);
+  const m = peerMap(pr, c.target);
+  head.replaceChildren(avatar(c.target, "", false), info, ...(m ? [m] : []));
+  renderChess(c, p);
 }
 
 // 5 bars, 0 = one red bar, null = no result yet (grey)
@@ -2433,11 +2437,14 @@ function fileBlock(m, ch) {
   return box;
 }
 
-function peerBubble(kind, text, t) {
+function peerBubble(kind, text, t, ok) {
   const b = el("div", "pb " + kind);
   const ref = imageRef(text);                     // CR78: a picture, fetched from the sender
-  const fm = text.match(FILE_RE);
-  if (fm) {
+  const fm = text.match(FILE_RE), qm = text.match(QSL_RE);
+  if (qm) {
+    b.classList.add("pqsl");
+    b.append(qslCard(qm, kind, curCh()));
+  } else if (fm) {
     b.classList.add("pfile");
     b.append(fileBlock(fm, activeCh));
   } else if (ref) {
@@ -2446,8 +2453,178 @@ function peerBubble(kind, text, t) {
     b.append(imageBlock(ref, kind === "tx", () => api("peer/imgget", { ch, hash: ref.hash })));
     if (ref.caption) b.append(el("div", "pb-t", wireToText(ref.caption)));
   } else b.append(el("div", "pb-t", wireToText(text) || " "));   // :-) -> emoji
-  b.append(el("div", "pb-time", hhmm(t)));
+  b.append(el("div", "pb-time", hhmm(t) + (kind === "tx" && ok !== undefined ? (ok ? " ✓" : " ·") : "")));
+  if (kind === "tx" && ok !== undefined) b.lastChild.title = ok ? "arrived (acknowledged by AX.25)" : "on its way";
   return b;
+}
+
+/* CR78 stage 8: ping, speed test, chess, QSL - a row of buttons and the results */
+function peerFunRow(f, c) {
+  const row = el("div", "ph-fun small");
+  const on = c.state === "online";
+  const btn = (txt, title, fn, dis) => {
+    const b = el("button", "sm", txt);
+    b.type = "button"; b.title = title; b.disabled = !on || !!dis;
+    b.onclick = (ev) => { ev.stopPropagation(); fn(); };
+    return b;
+  };
+  const fun = (act, arg) => api("peer/fun", { ch: activeCh, act, arg });
+  row.append(
+    btn("Ping", "Round trip time to the other station", () => fun("ping"), f.pinging),
+    btn("Speed test", "2 kB each way, net bytes per second", () => fun("speed"),
+        f.st && f.st.state === "running"),
+    btn("♟ Chess", "Play chess over packet", () => { chessOpen = !chessOpen; render(); }),
+    btn("QSL", "Send a digital QSL card (into the chat)", () => sendQsl(c)));
+  const res = [];
+  const rt = (v) => (v < 1 ? `${Math.round(v * 1000)} ms` : `${v.toFixed(1)} s`);
+  if (f.pings.length) res.push(`ping ${rt(f.pings[f.pings.length - 1])}` + (f.pings.length > 1
+    ? ` (last ${f.pings.length}: ${f.pings.map(rt).join(", ")})` : ""));
+  else if (f.pinging) res.push("ping ...");
+  if (f.st) res.push(f.st.state === "done" ? `speed → ${f.st.out} B/s ← ${f.st.in} B/s`
+    : `speed test running (${f.st.out ? "→ " + f.st.out + " B/s, " : ""}${f.st.n} bytes each way) ...`);
+  if (f.chess && f.chess.my_turn) res.push("♟ your move");
+  if (res.length) row.append(el("div", "ph-res", res.join(" · ")));
+  return row;
+}
+
+/* A small map without tiles: both stations, the line between them, the
+ * locator squares (2° x 1°) around, north up, a scale. OSM link for the real map. */
+function peerMap(pr, call) {
+  if (!pr.here || !pr.there) return null;
+  const [la1, lo1] = pr.here, [la2, lo2] = pr.there;
+  const mid = (la1 + la2) / 2, k = Math.cos((mid * Math.PI) / 180);
+  const x = (lo) => lo * k, W = 200, H = 120, pad = 22;
+  const xs = [x(lo1), x(lo2)], ys = [la1, la2];
+  const span = Math.max(Math.abs(xs[0] - xs[1]), Math.abs(ys[0] - ys[1]), 0.05);
+  const sc = Math.min((W - 2 * pad) / span, (H - 2 * pad) / span);
+  const cx = (xs[0] + xs[1]) / 2, cy = (ys[0] + ys[1]) / 2;
+  const px = (lo) => W / 2 + (x(lo) - cx) * sc, py = (la) => H / 2 - (la - cy) * sc;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("class", "ph-map");
+  const mk = (t, a, txt) => {
+    const e = document.createElementNS(NS, t);
+    for (const [kk, v] of Object.entries(a)) e.setAttribute(kk, v);
+    if (txt) e.textContent = txt;
+    svg.append(e); return e;
+  };
+  const lon0 = cx / k - (W / 2) / sc / k, lon1 = cx / k + (W / 2) / sc / k;
+  const lat0 = cy - (H / 2) / sc, lat1 = cy + (H / 2) / sc;
+  if ((lon1 - lon0) < 40) {                       // the locator grid, when it is not too dense
+    for (let lo = Math.ceil(lon0 / 2) * 2; lo <= lon1; lo += 2) mk("line", { x1: px(lo), y1: 0, x2: px(lo), y2: H, class: "g" });
+    for (let la = Math.ceil(lat0); la <= lat1; la += 1) mk("line", { x1: 0, y1: py(la), x2: W, y2: py(la), class: "g" });
+  }
+  mk("line", { x1: px(lo1), y1: py(la1), x2: px(lo2), y2: py(la2), class: "path" });
+  mk("circle", { cx: px(lo1), cy: py(la1), r: 4, class: "me" });
+  mk("circle", { cx: px(lo2), cy: py(la2), r: 4, class: "them" });
+  mk("text", { x: px(lo1) + 6, y: py(la1) - 5, class: "lb" }, pr.myloc || "");
+  mk("text", { x: px(lo2) + 6, y: py(la2) - 5, class: "lb" }, call);
+  mk("text", { x: W - 10, y: 14, class: "n" }, "N↑");
+  mk("text", { x: 6, y: H - 6, class: "lb" }, `${pr.km} km · ${pr.deg}°`);
+  const a = el("a", "ph-maplink");
+  a.href = `https://www.openstreetmap.org/directions?route=${la1.toFixed(4)},${lo1.toFixed(4)};${la2.toFixed(4)},${lo2.toFixed(4)}`;
+  a.target = "_blank"; a.rel = "noopener"; a.title = "Open the map (OpenStreetMap)";
+  a.append(svg);
+  return a;
+}
+
+/* QSL: a chat line "~Q f=<MHz> t=<UTC yyyymmddhhmm> loc=<locator> q=<bars>" */
+function sendQsl(c) {
+  const d = new Date(), z = (n) => String(n).padStart(2, "0");
+  const t = `${d.getUTCFullYear()}${z(d.getUTCMonth() + 1)}${z(d.getUTCDate())}${z(d.getUTCHours())}${z(d.getUTCMinutes())}`;
+  const p = c.peer || {}, q = p.q && p.q.bars !== undefined && p.q.bars !== null ? `${p.q.bars}` : "-";
+  const loc = (S.profile && S.profile.loc) || (p.prof && p.prof.myloc) || "-";
+  api("term", { text: `~Q f=${(S.freq || "-").replace(/\s/g, "")} t=${t} loc=${loc} q=${q}`, ch: activeCh });
+}
+const QSL_RE = /^~Q f=(\S+) t=(\d{12}) loc=(\S+) q=(\S+)$/;
+function qslCard(m, kind, c) {
+  const [, f, t, loc, q] = m;
+  const from = kind === "tx" ? S.mycall : c.target, to = kind === "tx" ? c.target : S.mycall;
+  const card = el("div", "qsl");
+  card.append(el("div", "qsl-h", "QSL"), el("div", "qsl-calls", `${from} → ${to}`),
+    el("div", "qsl-l", `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)} ${t.slice(8, 10)}:${t.slice(10)} UTC`),
+    el("div", "qsl-l", `${f} MHz · Packet · ${loc}` + (q !== "-" ? ` · link ${q}/5` : "")),
+    el("div", "qsl-73", "tnx fer QSO · 73!"));
+  const a = el("a", "sm qsl-adif", "ADIF");
+  a.title = "This QSO for your logbook program";
+  const rec = (k, v) => (v && v !== "-" ? `<${k}:${String(v).length}>${v} ` : "");
+  const freq = parseFloat(f);
+  const adif = "TBClient QSL\n<ADIF_VER:5>3.1.4 <PROGRAMID:8>TBClient <EOH>\n" + rec("CALL", c.target)
+    + rec("STATION_CALLSIGN", S.mycall) + rec("QSO_DATE", t.slice(0, 8)) + rec("TIME_ON", t.slice(8))
+    + rec("FREQ", isNaN(freq) ? "" : String(freq)) + rec("MODE", "PKT")
+    + (kind === "rx" ? rec("GRIDSQUARE", loc) + rec("QSL_RCVD", "Y") : rec("MY_GRIDSQUARE", loc) + rec("QSL_SENT", "Y"))
+    + "<EOR>\n";
+  a.href = "#";
+  a.onclick = (ev) => {                          // the file only when asked for
+    ev.preventDefault();
+    const u = URL.createObjectURL(new Blob([adif], { type: "text/plain" }));
+    const d = el("a"); d.href = u; d.download = `qsl-${c.target}-${t}.adi`;
+    document.body.append(d); d.click(); d.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 5000);
+  };
+  card.append(a);
+  return card;
+}
+
+/* Chess (chess.js has the rules): the board with the own colour at the bottom,
+ * tap a piece, then its square. */
+let chessOpen = false, chessSel = -1;
+function renderChess(c, p) {
+  const box = $("peer-chess");
+  const g = p && p.fun ? p.fun.chess : null;
+  const show = chessOpen && view === "peer" && p && p.fun;
+  box.classList.toggle("hidden", !show);
+  if (!show) return;
+  const fun = (act, arg) => api("peer/fun", { ch: activeCh, act, arg });
+  const on = c.state === "online";
+  box.replaceChildren();
+  if (!g) {
+    const r = el("div", "chess-new");
+    r.append(el("span", "", "New game - you play: "));
+    for (const [col, txt] of [["w", "white ♔"], ["b", "black ♚"]]) {
+      const b = el("button", "sm", txt); b.type = "button"; b.disabled = !on;
+      b.onclick = () => fun("chess-new", col);
+      r.append(b);
+    }
+    box.append(r);
+    return;
+  }
+  const mine = g.white === "me" ? "w" : "b";
+  const game = Chess.play(g.moves);
+  if (!g.result && (game.status === "mate" || game.status === "stalemate")) fun("chess-end", game.status);
+  const board = el("div", "chess-board" + (mine === "b" ? " flip" : ""));
+  const last = game.last ? [Chess.sq(game.last.slice(0, 2)), Chess.sq(game.last.slice(2, 4))] : [];
+  const can = on && g.my_turn && !g.result && game.legal.length;
+  const targets = chessSel >= 0 ? game.legal.filter((m) => Chess.sq(m.slice(0, 2)) === chessSel)
+    .map((m) => Chess.sq(m.slice(2, 4))) : [];
+  for (let row = 7; row >= 0; row--) for (let f = 0; f < 8; f++) {
+    const r = mine === "w" ? row : 7 - row, ff = mine === "w" ? f : 7 - f, i = r * 8 + ff;
+    const d = el("div", "csq " + ((r + ff) % 2 ? "l" : "d") + (last.includes(i) ? " last" : "")
+      + (i === chessSel ? " sel" : "") + (targets.includes(i) ? " tgt" : ""), Chess.GLYPH[game.st.b[i]] || "");
+    if (can) d.onclick = () => {
+      if (targets.includes(i)) {
+        const mv = game.legal.find((m) => Chess.sq(m.slice(0, 2)) === chessSel && Chess.sq(m.slice(2, 4)) === i
+          && (m.length === 4 || m[4] === "q"));                      // promotion: queen
+        chessSel = -1;
+        if (mv) fun("chess-move", mv);
+      } else chessSel = Chess.colorOf(game.st.b[i]) === mine ? i : -1;
+      render();
+    };
+    board.append(d);
+  }
+  const st = g.result ? `game over: ${g.result}` : game.status === "mate"
+    ? (g.my_turn ? "checkmate - you lost" : "checkmate - you won!")
+    : game.status === "stalemate" ? "stalemate - draw"
+      : (g.my_turn ? "your move" : `waiting for ${c.target}`) + (game.status === "check" ? " · check!" : "");
+  const side = el("div", "chess-side");
+  side.append(el("div", "chess-st", `♟ ${st}`), el("div", "small muted",
+    `you play ${mine === "w" ? "white" : "black"} · move ${Math.floor(g.moves.length / 2) + 1}` + (game.ok ? "" : " · (a move did not follow the rules)")));
+  const acts = el("div", "chess-acts");
+  const mk = (txt, fn, dis) => { const b = el("button", "sm", txt); b.type = "button"; b.disabled = !!dis; b.onclick = fn; acts.append(b); };
+  if (!g.result && !["mate", "stalemate"].includes(game.status)) mk("Resign", () => fun("chess-resign"), !on);
+  mk("Close game", () => { chessOpen = false; fun("chess-close"); });
+  side.append(acts);
+  box.append(board, side);
 }
 
 function renderPeerChat(lines) {
@@ -2464,7 +2641,7 @@ function renderPeerChat(lines) {
     peerChatKey = key;
     termShown = S.term_n || 0;
     out.replaceChildren(...pc.msgs.map((m) => m.dir === "note" ? el("div", "pb sys", m.text)
-      : peerBubble(m.dir, m.text, m.t)));
+      : peerBubble(m.dir, m.text, m.t, m.ok)));
     if (first || atBottom) out.scrollTop = out.scrollHeight;
     return;
   }

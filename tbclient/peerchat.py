@@ -51,6 +51,10 @@ class PeerChat:
                 h TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS msgs_peer ON msgs (peer, dir, n);
         """)
+        try:                                     # ok = acknowledged by AX.25 (tick, 08.11.2026)
+            self.db.execute("ALTER TABLE msgs ADD COLUMN ok INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass                                 # there already
         self.db.commit()
         self.version = 0                         # changes with every write (GUI)
 
@@ -127,7 +131,17 @@ class PeerChat:
         return self.db.execute("SELECT n, t, text FROM msgs WHERE peer = ? AND dir = ? "
                                "AND n > ? AND n <= ? ORDER BY n", (peer, direction, n, upto)).fetchall()
 
+    def delivered(self, peer: str, numbers: list[int]) -> None:
+        """These sent lines are acknowledged (AX.25: nothing left to send)."""
+        if not numbers:
+            return
+        self.db.executemany("UPDATE msgs SET ok = 1 WHERE peer = ? AND dir = 'tx' AND n = ?",
+                            [(peer, n) for n in numbers])
+        self.db.commit()
+        self.version += 1
+
     def messages(self, peer: str, limit: int = KEEP) -> list[dict]:
-        rows = self.db.execute("SELECT id, dir, n, text, t FROM msgs WHERE peer = ? "
+        rows = self.db.execute("SELECT id, dir, n, text, t, ok FROM msgs WHERE peer = ? "
                                "ORDER BY t DESC, id DESC LIMIT ?", (peer, limit)).fetchall()
-        return [{"id": i, "dir": d, "n": n, "text": x, "t": t} for i, d, n, x, t in reversed(rows)]
+        return [{"id": i, "dir": d, "n": n, "text": x, "t": t, "ok": bool(ok)}
+                for i, d, n, x, t, ok in reversed(rows)]

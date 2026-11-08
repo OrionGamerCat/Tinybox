@@ -1,0 +1,4 @@
+- TBClient zu TBClient: Ping, Speedtest (B/s in beide Richtungen),
+  Schach per Packet, digitale QSL-Karte mit ADIF, Mini-Karte.
+- Zustellhaken: eigene Zeilen bekommen ein Haekchen, wenn sie
+  angekommen sind.

@@ -27,6 +27,10 @@ Zuletzt dazugekommen
   gleich auf diesen Kanal (Terminal, bei einem TBClient dessen Ansicht).
 - Bilder zwischen zwei TBClients (CR78): Knopf im TBClient-Chat, ueber Funk
   nur der Verweis; der andere holt das Bild per Antippen beim Sender.
+- TBClient zu TBClient, Extras (CR78): Ping, Speedtest in beide Richtungen,
+  Schach per Packet (Brett im Browser, Partie bleibt gespeichert), QSL-Karte
+  mit ADIF-Download, Mini-Karte aus den Locatoren, Zustellhaken an eigenen
+  Zeilen.
 - Dateien zwischen zwei TBClients (CR78): Knopf (Bueroklammer), max. 64 KB, LZHUF;
   der andere holt sie per Antippen beim Sender. Die Karte zeigt, wie weit
   die Uhren der beiden auseinander liegen.

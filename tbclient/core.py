@@ -496,6 +496,19 @@ class ClientCore:
         chan = self.channels.get(ch)
         return chan is not None and chan.peer is not None and chan.peer.img.fetch(hash)
 
+    def peer_fun(self, ch: int, act: str, arg: str = "") -> bool:
+        """CR78: ping, speed test, chess (new / move / resign / end / close)."""
+        chan = self.channels.get(ch)
+        if chan is None or chan.peer is None:
+            return False
+        if act == "ping":
+            return chan.peer.fun.ping()
+        if act == "speed":
+            return chan.peer.fun.speedtest()
+        if act.startswith("chess-"):
+            return chan.peer.fun.chess(act[6:], arg)
+        return False
+
     def peer_heard(self, ch: int) -> bool:
         """CR78: ask the TBClient in channel ch whom it hears."""
         chan = self.channels.get(ch)
@@ -540,6 +553,8 @@ class ClientCore:
                         c.outstanding = await c.link.outstanding()
                     except Exception:
                         c.outstanding = None
+                    if c.peer is not None:
+                        c.peer.outstanding(c.outstanding)       # CR78: the delivery tick
 
     def join(self, n: int) -> bool:
         if not self.handshake_done or not any(b["n"] == n for b in self.boards):

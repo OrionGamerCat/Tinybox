@@ -57,6 +57,7 @@ from prcore import profile as pf
 
 from .peerchat import new_gen
 from .peerfile import PeerFiles
+from .peerfun import PeerFun
 from .peerimg import PeerImages
 
 from . import VERSION
@@ -64,7 +65,7 @@ from . import VERSION
 if TYPE_CHECKING:
     from .channels import Channel
 
-PEER_CAPS = ("PROF", "HEARD", "HIST", "IMG", "FILE")
+PEER_CAPS = ("PROF", "HEARD", "HIST", "IMG", "FILE", "FUN")
 HEARD_MAX = 10              # stations in one //HEARD line
 RESEND_MAX = 10             # lines sent again at most (//HM); more missing = both delete
 
@@ -112,6 +113,8 @@ class Peer:
         self._snap: tuple[int, str] | None = None   # own sent stream when //HIST went out
         self.img = PeerImages(self)          # pictures straight from the sender (peerimg.py)
         self.files = PeerFiles(self)         # files, LZHUF (peerfile.py)
+        self.fun = PeerFun(self)             # ping, speed test, chess (peerfun.py)
+        self.pending: list[int] = []         # sent lines (numbers) not acknowledged yet
 
     @property
     def newer(self) -> bool:
@@ -151,7 +154,17 @@ class Peer:
         """A chat line typed here (tx) or from the other side (rx)."""
         text = text.rstrip()
         if self.hist and text:
-            self.store.add(self.call, direction, text)
+            n = self.store.add(self.call, direction, text)
+            if direction == "tx":
+                self.pending.append(n)          # the tick comes when AX.25 has it
+
+    def outstanding(self, waiting: int | None) -> None:
+        """From the core's poll: nothing waiting any more = every line sent on
+        this connection has arrived (AX.25 acknowledged it)."""
+        if waiting == 0 and self.pending and self.hist:
+            self.store.delivered(self.call, self.pending)
+            self.pending = []
+            self.ch.core._touch()
 
     def clear_history(self) -> None:
         """The button: delete here, the other side deletes too (now or at the next connect)."""
@@ -201,6 +214,7 @@ class Peer:
             return
         for n, t, text in missing:               # lost at the last disconnect: again
             self._send(f"//HM {n} {t} {text}")
+            self.pending.append(n)
 
     def _on_hm(self, rest: str) -> None:
         """//HM <n> <unix> <text>: a line of theirs that did not arrive last time."""
@@ -263,6 +277,9 @@ class Peer:
         elif word in ("FGET", "F", "NOFILE"):
             if not self.files.take(word, rest):
                 return False
+        elif word in ("PING", "PONG", "ST", "STR", "CHESS"):
+            if not self.fun.take(word, rest):
+                return False
         else:
             return False
         self.ch.core._touch()
@@ -296,6 +313,8 @@ class Peer:
         if here and there:
             km, deg = aprs.distance_bearing(here, there)
             row["km"], row["deg"] = round(km), round(deg)
+            row["here"], row["there"] = here, there            # the little map (CR78)
+            row["myloc"] = mine["loc"] or self.ch.core.cfg.locator
         return row
 
     # --- heard list ------------------------------------------------------------------
@@ -338,7 +357,8 @@ class Peer:
         return {"v": self.version, "newer": self.newer, "caps": sorted(self.caps),
                 "prof": self.profile_row(), "heard": self.heard, "heard_at": self.heard_at,
                 "hist": self.hist, "img": self.img.ok, "file": self.files.ok,
-                "clock": self.clock_off, "q": self.quality_summary(now)}
+                "clock": self.clock_off, "q": self.quality_summary(now),
+                "fun": self.fun.summary() if "FUN" in self.caps else None}
 
 
 def _dir(deg: float) -> str:

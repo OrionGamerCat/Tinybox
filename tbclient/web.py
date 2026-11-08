@@ -15,6 +15,7 @@ API:
   POST /api/disconnect {"ch": n} | /api/leave | /api/channel/close {"ch": n}
   POST /api/term   {"text": "...", "ch": n}   a raw line from the terminal view (CR43)
   POST /api/peer/heard {"ch": n}             CR78: ask the TBClient there whom it hears
+  POST /api/peer/fun  {"ch", "act", "arg"}   CR78: ping, speed, chess-new/move/resign/end/close
   POST /api/peer/clear {"ch": n}             CR78: delete the chat history with it (both sides)
   POST /api/peer/img   {"ch", "data", "blurhash", "caption"}  CR78: a picture to the TBClient
   POST /api/peer/imgget {"ch", "hash"}       CR78: fetch a picture from the TBClient that sent it
@@ -83,6 +84,7 @@ FILES = {"/": "index.html", "/app.css": "app.css", "/app.js": "app.js",
          "/aprs/symbols-1.png": "aprs/aprs-symbols-24-1@2x.png",
          "/aprs/names.json": "aprs/names.json", "/manifest.json": "manifest.json",
          "/logo.svg": "logo.svg", "/aprsstats.js": "aprsstats.js", "/aprsgraph.js": "aprsgraph.js",
+         "/chess.js": "chess.js",
          "/aprsview.js": str(SHARED / "aprsview.js"), "/aprsview.css": str(SHARED / "aprsview.css")}
 # CR42: the icons of the connection in the top bar
 FILES.update({f"/conn/{p.name}": f"conn/{p.name}" for p in (STATIC / "conn").glob("*.png")})
@@ -245,6 +247,10 @@ class WebServer:
             elif path == "/api/peer/imgget":       # CR78: {"ch", "hash"} - fetch from the sender
                 ch = data.get("ch")
                 ok = core.peer_image_get(ch if isinstance(ch, int) else 0, str(data.get("hash", "")))
+            elif path == "/api/peer/fun":          # CR78: {"ch", "act", "arg"} ping/speed/chess-*
+                ch = data.get("ch")
+                ok = core.peer_fun(ch if isinstance(ch, int) else 0, str(data.get("act", "")),
+                                   str(data.get("arg", "")))
             elif path == "/api/peer/clear":        # CR78: {"ch": n} - delete the chat history
                 ch = data.get("ch")
                 ok = core.peer_clear(ch if isinstance(ch, int) else 0)

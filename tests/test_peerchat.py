@@ -206,6 +206,55 @@ class PeerHistoryTests(unittest.TestCase):
             dw.server.close()
         asyncio.run(scenario())
 
+    def test_ping_speed_chess_tick(self):
+        """CR78 stage 8: ping, speed test both ways, chess turns, the delivery tick."""
+        async def scenario():
+            dw = FakeDirewolf()
+            port = await dw.start()
+            with tempfile.TemporaryDirectory() as ta, tempfile.TemporaryDirectory() as tb:
+                a = ClientCore(client_cfg(ta, agw_port=port))
+                b = ClientCore(dataclasses.replace(client_cfg(tb, agw_port=port), mycall="OE3TEC"))
+                tasks = [asyncio.create_task(a.run()), asyncio.create_task(b.run())]
+                await asyncio.wait_for(a.port.agw_up.wait(), 5)
+                await asyncio.wait_for(b.port.agw_up.wait(), 5)
+                await until(lambda: len([c for c in dw.clients if c["calls"]]) == 2)
+                self.assertTrue(await b.connect("OE3GAS", ch=1))
+                await until(lambda: a.channels[1].peer is not None and b.channels[1].peer is not None)
+                await asyncio.sleep(0.2)
+                pa, pb = a.channels[1].peer, b.channels[1].peer
+                # ping
+                self.assertTrue(b.peer_fun(1, "ping"))
+                await until(lambda: pb.fun.pings)
+                # speed test: both directions measured, the bytes are no chat lines
+                self.assertTrue(b.peer_fun(1, "speed"))
+                await until(lambda: pb.fun.st["state"] == "done")
+                self.assertGreater(pb.fun.st["out"], 0)
+                self.assertGreater(pb.fun.st["in"], 0)
+                self.assertEqual(a.peerchat.count("OE3TEC"), 0)
+                # chess: b plays white, turns are checked
+                self.assertTrue(b.peer_fun(1, "chess-new", "w"))
+                await until(lambda: pa.fun.game is not None)
+                self.assertEqual(pa.fun.game["white"], "them")
+                self.assertFalse(a.peer_fun(1, "chess-move", "e7e5"))       # not a's turn
+                self.assertTrue(b.peer_fun(1, "chess-move", "e2e4"))
+                await until(lambda: pa.fun.game["moves"] == ["e2e4"])
+                self.assertFalse(b.peer_fun(1, "chess-move", "d2d4"))       # twice in a row
+                self.assertTrue(a.peer_fun(1, "chess-move", "e7e5"))
+                await until(lambda: pb.fun.game["moves"] == ["e2e4", "e7e5"])
+                self.assertTrue(a.peer_fun(1, "chess-resign"))
+                await until(lambda: pb.fun.game["result"] == "they resigned")
+                self.assertIn("chess", b.settings)                          # kept for later
+                # delivery tick
+                self.assertTrue(b.send_raw("kommt an?", ch=1))
+                await until(lambda: a.peerchat.count("OE3TEC") >= 1)
+                self.assertFalse(b.peerchat.messages("OE3GAS")[-1]["ok"])
+                pb.outstanding(0)
+                self.assertTrue([m for m in b.peerchat.messages("OE3GAS") if m["dir"] == "tx"][-1]["ok"])
+                for t in tasks:
+                    t.cancel()
+            dw.server.close()
+        asyncio.run(scenario())
+
     def test_link_quality_from_q(self):
         async def scenario():
             dw = FakeDirewolf()
