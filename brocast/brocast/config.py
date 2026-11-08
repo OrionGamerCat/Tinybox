@@ -410,7 +410,7 @@ def load(path: str | Path) -> Config:
     except (KeyError, IndexError, ValueError) as exc:
         raise ConfigError(f"[beacon] text: Platzhalter {exc} unbekannt "
                           "(erlaubt: {call} {version} {pages})") from None
-    if len(sample.encode("utf-8")) > 250:
+    if len("\r".join(sample.splitlines()).encode("utf-8")) > 250:
         raise ConfigError("[beacon] text: höchstens 250 Bytes (ein UI-Frame)")
     if not sample.isascii():
         cfg.hints.append("[beacon] text enthält Umlaute/Sonderzeichen - manche Terminals zeigen "

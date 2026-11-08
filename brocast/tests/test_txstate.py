@@ -164,6 +164,8 @@ class BeaconConfigTests(unittest.TestCase):
                          "dest = ID\n", encoding="utf-8")
             c = config.load(p)
             self.assertEqual((c.beacon.interval_min, c.beacon.dest), (60, "ID"))
+            p.write_text(base + "[beacon]\ntext = {call} brocast\n       zweite Zeile\n", encoding="utf-8")
+            self.assertEqual(config.load(p).beacon.text, "{call} brocast\nzweite Zeile")
             for bad in ("interval_min = 2\n", "text = {foo}\n", "text = " + "x" * 300 + "\n"):
                 p.write_text(base + "[beacon]\n" + bad, encoding="utf-8")
                 with self.assertRaises(config.ConfigError):

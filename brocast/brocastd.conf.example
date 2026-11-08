@@ -67,7 +67,10 @@ dict_broadcast_hours = 24     ; Dictionary gepackt über Funk senden, alle n Stu
                               ; sieht, was hier sendet (UI-Frame, kein brocast-Format)
 interval_min = 30             ; alle n Minuten (mindestens 5), 0 = keine Bake; die erste beim Start
 text         = {call}: brocast - Teletext-Seiten ueber Packet Radio (UI-Frames an BROCST). Empfang mit dem brocast-Listener.
-                              ; frei wählbar, höchstens 250 Bytes, ASCII empfohlen;
+                              ; frei wählbar, höchstens 250 Bytes (alle Zeilen zusammen), ASCII empfohlen;
+                              ; mehrere Zeilen: die weiteren eingerückt darunter, z. B.
+                              ;   text = {call}: brocast - Teletext ueber Packet Radio
+                              ;          {pages} Seiten im Karussell, Infos: Mailbox OE3GAS-1
                               ; Platzhalter: {call} Rufzeichen, {version} brocastd-Version, {pages} Seiten im Karussell
 dest         = BEACON         ; AX.25-Ziel der Bake (z. B. BEACON, ID, CQ)
 ; path       =                ; Digipeater; ohne Eintrag wie [station] path

@@ -84,7 +84,7 @@ class Daemon:
             self.carousel.schedules[DICT_DATA] = self._dict_gap
             if cfg.beacon.interval_min:
                 self.carousel.set_beacon(self._beacon_frame, cfg.beacon.interval_min,
-                                         self._beacon_text())
+                                         " / ".join(self._beacon_text().splitlines()))
             self.station = Station(cfg, self.codec, self.store, clock, self.carousel.wake,
                                    zd=self.zd)
             self.ingest = IngestServer(self.station, cfg.station.ingest_host,
@@ -302,10 +302,11 @@ class Daemon:
         b = self.cfg.beacon
         text = self._beacon_text()
         if self.carousel:
-            self.carousel.beacon_text = text
+            self.carousel.beacon_text = " / ".join(text.splitlines())
         path = self.cfg.station.path if b.path is None else b.path
-        return UIFrame(dest=b.dest, src=self.cfg.callsign, info=text.encode("utf-8")[:250],
-                       path=list(path)).encode()
+        # several lines (indented continuation lines in brocastd.conf): CR, as terminals expect
+        info = "\r".join(text.splitlines()).encode("utf-8")[:250]
+        return UIFrame(dest=b.dest, src=self.cfg.callsign, info=info, path=list(path)).encode()
 
     def tx_status(self) -> dict[str, Any]:
         """What the station sends right now (web GUI, view "Sendung")."""
@@ -377,7 +378,8 @@ class Daemon:
             items.append(("Alterung", ", ".join(f"ab {h} h alle {m} min" if m else f"ab {h} h Pause"
                                                 for h, m in st.aging) or "aus"))
             b = cfg.beacon
-            items.append(("Bake", f"alle {b.interval_min} min an {b.dest}: {self._beacon_text()}"
+            items.append(("Bake", f"alle {b.interval_min} min an {b.dest}: "
+                          f"{' / '.join(self._beacon_text().splitlines())}"
                           if b.interval_min else "aus"))
         items += [None, ("Log-Datei", cfg.log_file or "- (nur Konsole)")]
         if cfg.is_station and cfg.txlog_dir is not None:
