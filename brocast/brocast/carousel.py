@@ -107,6 +107,11 @@ class Carousel:
         self.last_queue: int | None = None    # AGW: frames Direwolf still holds (last look)
         self.day = ""
         self.day_pages = self.day_frames = 0
+        # [beacon]: a plain-text UI frame every interval_s (build() -> the frame)
+        self.beacon_build: Callable[[], bytes] | None = None
+        self.beacon_interval_s = 0.0
+        self.beacon_next = 0.0
+        self.beacon_text = ""
 
     def wake(self) -> None:
         self._wake.set()
@@ -193,9 +198,41 @@ class Carousel:
             except asyncio.TimeoutError:
                 pass
 
+    def set_beacon(self, build: Callable[[], bytes], interval_min: int, text: str) -> None:
+        self.beacon_build, self.beacon_interval_s, self.beacon_text = build, interval_min * 60.0, text
+        self.beacon_next = self.clock()                 # the first one right at the start
+
+    async def _beacon(self, now: float) -> bool:
+        """[beacon] due: one UI frame in plain text, between two pages (never in
+        the middle of one). Counts towards the airtime, but is never held back
+        by the budget - it is the station's identification. False = link down."""
+        if self.beacon_build is None or self.beacon_interval_s <= 0 or now < self.beacon_next:
+            return True
+        frame = self.beacon_build()
+        await self._pace(len(frame))
+        if not await self.send(frame):
+            self._burst_count = 0
+            return False
+        air = airtime_s(len(frame), self.cfg.baud, self.cfg.txdelay_ms)
+        self.budget.add(now, air)
+        self._count_frame()
+        self.beacon_next = now + self.beacon_interval_s
+        if self.txlog:
+            self.txlog.record(self.clock(), "BEACON", 0, 0, 1, 1, "beacon", len(frame),
+                              airtime_s(len(frame), self.cfg.baud, 0), "brocastd", "beacon",
+                              self.beacon_text)
+        self.recent.appendleft({"t": self.clock(), "id": None, "title": self.beacon_text,
+                                "typ": "beacon", "pri": 0, "sent": 1, "total": 1,
+                                "air": round(air, 1), "result": "ok"})
+        log.info("Bake gesendet (%s Bytes)", len(frame))
+        return True
+
     async def step(self) -> float:
         """Send what is due. Returns seconds until the next useful step."""
         now = self.clock()
+        if not await self._beacon(now):
+            log.debug("Direwolf nicht verbunden, Bake verschoben")
+            return 5.0
         for row in self.store.expired_pages(int(now)):
             log.info("Seite %s (%s/%s) abgelaufen, entfernt", row.id, row.provider, row.pkey)
             self.store.delete_page(row.pid)
@@ -250,6 +287,8 @@ class Carousel:
                      " [zurückgezogen]" if row.state == "withdrawn" else "")
 
         nxt = self.store.next_due()
+        if self.beacon_build is not None and self.beacon_interval_s > 0:
+            nxt = self.beacon_next if nxt is None else min(nxt, self.beacon_next)
         if nxt is None:
             return MAX_SLEEP
         return min(max(nxt - self.clock(), 0.5), MAX_SLEEP)
@@ -307,6 +346,9 @@ class Carousel:
                            "percent": self.cfg.airtime_percent,
                            "window_min": self.cfg.airtime_window_min},
                 "gap_s": self.cfg.burst_gap_s, "burst_frames": self.cfg.burst_frames,
+                "beacon": None if self.beacon_build is None or self.beacon_interval_s <= 0 else
+                {"interval_min": round(self.beacon_interval_s / 60), "next": self.beacon_next,
+                 "text": self.beacon_text},
                 "today": {"pages": self.day_pages, "frames": self.day_frames}}
 
     def _after_send(self, row: PageRow, now: int) -> None:

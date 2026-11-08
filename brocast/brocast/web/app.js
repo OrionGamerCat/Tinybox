@@ -2500,6 +2500,7 @@ function renderTxView() {
   fact("Schnittstelle", tx.agw ? `${tx.interface} · Queue wird abgefragt` : `${tx.interface} · Ende berechnet`);
   fact("Heute gesendet", `${tx.today.pages} Seiten · ${tx.today.frames} Frames`);
   fact("Pause zwischen Aussendungen", `${num(tx.gap_s)} s`);
+  if (tx.beacon) fact("Bake", `alle ${tx.beacon.interval_min} min · nächste ${tx.beacon.next <= tx.now ? "gleich" : "in " + mmss(tx.beacon.next - tx.now)}`);
   bud.append(el("h3", null, "Airtime-Budget"), big, g,
     el("div", "bnote", "Wird es eng, warten normale Seiten; Notfall-Seiten (Priorität 3) gehen trotzdem."), facts);
   top.append(now, bud);
@@ -2554,6 +2555,13 @@ function renderTxView() {
   if (!tx.recent.length) ll.append(el("div", "none", "seit dem Start noch nichts gesendet"));
   for (const p of tx.recent) {
     const row = el("div", "r");
+    if (p.typ === "beacon") {                       // [beacon]: plain text, no page
+      const ti = el("span", "ti beacon", p.title);
+      ti.title = p.title;
+      row.append(el("span", "tm", hms(p.t)), el("span", "pg", "Bake"), ti, el("span", "res ok", "✓"));
+      ll.append(row);
+      continue;
+    }
     const ti = el("span", "ti", p.title || p.typ);
     if (p.pri >= 3) ti.append(" ", el("span", "tag alarm", "Notfall"));
     const res = p.result === "ok" ? ["ok", `${p.sent}/${p.total} ✓`] : p.result === "withdrawn"

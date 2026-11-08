@@ -63,6 +63,15 @@ max_subpages       = 40        ; Format 2: höchstens so viele Fragmente je Seit
 dict_source        = Mailbox OE3GAS-1, Befehl DICT   ; wird mit der Dictionary-Version angekündigt (leer = nein)
 dict_broadcast_hours = 24     ; Dictionary gepackt über Funk senden, alle n Stunden (0 = aus)
 
+[beacon]                      ; nur Station: Bake im Klartext, damit jeder am Terminal/Monitor
+                              ; sieht, was hier sendet (UI-Frame, kein brocast-Format)
+interval_min = 30             ; alle n Minuten (mindestens 5), 0 = keine Bake; die erste beim Start
+text         = {call}: brocast - Teletext-Seiten ueber Packet Radio (UI-Frames an BROCST). Empfang mit dem brocast-Listener.
+                              ; frei wählbar, höchstens 250 Bytes, ASCII empfohlen;
+                              ; Platzhalter: {call} Rufzeichen, {version} brocastd-Version, {pages} Seiten im Karussell
+dest         = BEACON         ; AX.25-Ziel der Bake (z. B. BEACON, ID, CQ)
+; path       =                ; Digipeater; ohne Eintrag wie [station] path
+
 [update]
 check     = yes               ; 1x täglich bei GitHub nach neuem TinyBox-Release fragen (PLANUNG 24):
                               ; Zeile im Log und auf der Statusseite, es wird nichts installiert

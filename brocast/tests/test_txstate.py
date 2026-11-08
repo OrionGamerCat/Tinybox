@@ -111,3 +111,60 @@ class TakeOffAirTests(unittest.IsolatedAsyncioTestCase):
         from brocast.station import NotFound
         with self.assertRaises(NotFound):
             self.st.take_off_air(9999)
+
+
+class BeaconTests(unittest.IsolatedAsyncioTestCase):
+    async def test_beacon_every_interval_plain_text(self):
+        from brocast.ax25 import UIFrame
+        from brocast.frame import parse as parse_frame
+        clock = Clock()
+        sent: list[bytes] = []
+
+        async def send(data: bytes) -> bool:
+            sent.append(data)
+            return True
+
+        async def sleep(s: float) -> None:
+            pass
+
+        st, store = make_station(clock)
+        car = Carousel(store, send, st.cfg.station, "OE3GAS-5", clock, mono=lambda: 0.0, sleep=sleep)
+        text = "OE3GAS-5: brocast - Teletext ueber Packet Radio"
+        car.set_beacon(lambda: UIFrame(dest="BEACON", src="OE3GAS-5", info=text.encode()).encode(),
+                       30, text)
+        await car.step()                                   # the first one at the start
+        self.assertEqual(len(sent), 1)
+        f = UIFrame.decode(sent[0])
+        self.assertEqual((f.dest, f.info.decode()), ("BEACON", text))
+        self.assertIsNone(parse_frame(sent[0]))            # no brocast frame: listeners ignore it
+        clock.t += 29 * 60
+        await car.step()
+        self.assertEqual(len(sent), 1)
+        clock.t += 61
+        await car.step()
+        self.assertEqual(len(sent), 2)
+        tx = car.tx_state()
+        self.assertEqual(tx["recent"][0]["typ"], "beacon")
+        self.assertEqual(tx["beacon"]["interval_min"], 30)
+        self.assertGreater(tx["budget"]["used_s"], 0)
+
+
+class BeaconConfigTests(unittest.TestCase):
+    def test_config(self):
+        import tempfile
+        from pathlib import Path
+        from brocast import config
+        base = "[brocastd]\nmode = station\ncallsign = OE3GAS-5\n[radio]\ninterface = kiss\n"
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "b.conf"
+            p.write_text(base, encoding="utf-8")
+            c = config.load(p)
+            self.assertEqual((c.beacon.interval_min, c.beacon.dest), (30, "BEACON"))
+            p.write_text(base + "[beacon]\ninterval_min = 60\ntext = {call} hier brocast, {pages} Seiten\n"
+                         "dest = ID\n", encoding="utf-8")
+            c = config.load(p)
+            self.assertEqual((c.beacon.interval_min, c.beacon.dest), (60, "ID"))
+            for bad in ("interval_min = 2\n", "text = {foo}\n", "text = " + "x" * 300 + "\n"):
+                p.write_text(base + "[beacon]\n" + bad, encoding="utf-8")
+                with self.assertRaises(config.ConfigError):
+                    config.load(p)

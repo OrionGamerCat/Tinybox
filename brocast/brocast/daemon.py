@@ -19,6 +19,7 @@ import yaml
 
 from . import colorlog, config, dictimport, dicttransfer, fragment, zdict
 from .agw import AgwLink
+from .ax25 import UIFrame
 from .carousel import Carousel
 from .codec import BrocastError, Codec
 from .dictionary import Dictionary
@@ -81,6 +82,9 @@ class Daemon:
             self.carousel = Carousel(self.store, self._send, cfg.station, cfg.callsign, clock,
                                      txlog=self.txlog, queue_len=queue_len)
             self.carousel.schedules[DICT_DATA] = self._dict_gap
+            if cfg.beacon.interval_min:
+                self.carousel.set_beacon(self._beacon_frame, cfg.beacon.interval_min,
+                                         self._beacon_text())
             self.station = Station(cfg, self.codec, self.store, clock, self.carousel.wake,
                                    zd=self.zd)
             self.ingest = IngestServer(self.station, cfg.station.ingest_host,
@@ -288,6 +292,21 @@ class Daemon:
 
     # -- status -------------------------------------------------------------
 
+    def _beacon_text(self) -> str:
+        pages = len(self.store.list_pages()) if self.carousel else 0
+        return self.cfg.beacon.text.format(call=self.cfg.callsign, version=VERSION, pages=pages)
+
+    def _beacon_frame(self) -> bytes:
+        """[beacon]: plain-text UI frame (PID F0), destination BEACON - readable
+        in any terminal or monitor, ignored by brocast listeners (not BROCST)."""
+        b = self.cfg.beacon
+        text = self._beacon_text()
+        if self.carousel:
+            self.carousel.beacon_text = text
+        path = self.cfg.station.path if b.path is None else b.path
+        return UIFrame(dest=b.dest, src=self.cfg.callsign, info=text.encode("utf-8")[:250],
+                       path=list(path)).encode()
+
     def tx_status(self) -> dict[str, Any]:
         """What the station sends right now (web GUI, view "Sendung")."""
         if not self.carousel:
@@ -357,6 +376,9 @@ class Daemon:
                 and st.compress and self.zd.ok else "")))
             items.append(("Alterung", ", ".join(f"ab {h} h alle {m} min" if m else f"ab {h} h Pause"
                                                 for h, m in st.aging) or "aus"))
+            b = cfg.beacon
+            items.append(("Bake", f"alle {b.interval_min} min an {b.dest}: {self._beacon_text()}"
+                          if b.interval_min else "aus"))
         items += [None, ("Log-Datei", cfg.log_file or "- (nur Konsole)")]
         if cfg.is_station and cfg.txlog_dir is not None:
             items.append(("Sendeprotokoll", cfg.txlog_dir))

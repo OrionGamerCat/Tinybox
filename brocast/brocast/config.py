@@ -74,6 +74,20 @@ class StationCfg:
     dict_broadcast_hours: int = 24  # dictionary packed over the air every n hours; 0 = off
 
 
+DEFAULT_BEACON = "{call}: brocast - Teletext-Seiten ueber Packet Radio (UI-Frames an BROCST). " \
+                 "Empfang mit dem brocast-Listener."
+
+
+@dataclass
+class BeaconCfg:
+    """[beacon] (08.11.2026): a plain-text UI frame now and then, so everyone
+    listening with an ordinary terminal or monitor knows the system: brocast."""
+    interval_min: int = 30        # 0 = no beacon
+    text: str = DEFAULT_BEACON    # {call} {version} {pages} are filled in
+    dest: str = "BEACON"          # AX.25 destination of the beacon (not BROCST: plain text)
+    path: list[str] | None = None  # digipeaters; None = like [station] path
+
+
 @dataclass
 class ListenerCfg:
     web_host: str = "127.0.0.1"
@@ -96,6 +110,7 @@ class Config:
     db_flush_sec: int = 600              # flüchtige DB-Daten so oft schreiben (PLANUNG 11.9)
     direwolf: DirewolfCfg = field(default_factory=DirewolfCfg)
     station: StationCfg = field(default_factory=StationCfg)
+    beacon: BeaconCfg = field(default_factory=BeaconCfg)
     listener: ListenerCfg = field(default_factory=ListenerCfg)
     sources: dict = field(default_factory=dict)   # CR70: woher baud / txdelay kommen
     hints: list = field(default_factory=list)     # CR70: alte Schlüssel in der Datei
@@ -372,6 +387,35 @@ def load(path: str | Path) -> Config:
         raise ConfigError("[station] wire_format muss 1 (eine Seite je Frame) "
                           "oder 2 (Fragmente, Standard) sein")
     cfg.station = st
+
+    bc = BeaconCfg()
+    if cp.has_section("beacon"):
+        ptext = get("beacon", "path", "-")
+        bc = BeaconCfg(interval_min=getint("beacon", "interval_min", bc.interval_min),
+                       text=get("beacon", "text", bc.text) or bc.text,
+                       dest=get("beacon", "dest", bc.dest).upper() or bc.dest,
+                       path=None if ptext == "-" else
+                       [p.strip().upper() for p in ptext.split(",") if p.strip()])
+    if not 0 <= bc.interval_min <= 24 * 60:
+        raise ConfigError("[beacon] interval_min muss 0..1440 sein (0 = keine Bake)")
+    if bc.interval_min and 0 < bc.interval_min < 5:
+        raise ConfigError("[beacon] interval_min: mindestens 5 Minuten (Kanal frei halten)")
+    if not re.fullmatch(r"[A-Z0-9]{1,6}(-(1[0-5]|[0-9]))?", bc.dest):
+        raise ConfigError(f"[beacon] dest: {bc.dest!r} ist kein AX.25-Ziel")
+    for digi in bc.path or []:
+        if not is_ax25_call(digi):
+            raise ConfigError(f"[beacon] path: {digi!r} ist kein AX.25-Rufzeichen")
+    try:
+        sample = bc.text.format(call=cfg.callsign or "OE0XXX-0", version="0.0", pages=0)
+    except (KeyError, IndexError, ValueError) as exc:
+        raise ConfigError(f"[beacon] text: Platzhalter {exc} unbekannt "
+                          "(erlaubt: {call} {version} {pages})") from None
+    if len(sample.encode("utf-8")) > 250:
+        raise ConfigError("[beacon] text: höchstens 250 Bytes (ein UI-Frame)")
+    if not sample.isascii():
+        cfg.hints.append("[beacon] text enthält Umlaute/Sonderzeichen - manche Terminals zeigen "
+                         "sie falsch an (ASCII empfohlen)")
+    cfg.beacon = bc
 
     try:
         allow_lan = cp.getboolean("listener", "allow_lan", fallback=False)

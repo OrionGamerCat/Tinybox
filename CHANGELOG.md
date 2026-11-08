@@ -2,6 +2,9 @@
 
 ## Unveröffentlicht
 
+- brocastd (Station): **Bake im Klartext** – `[beacon] interval_min`, `text`, `dest`, `path`:
+  ein UI-Frame (z. B. an `BEACON`), der brocast als System nennt; Platzhalter `{call}` `{version}`
+  `{pages}`. Zwischen zwei Seiten, im Sendeprotokoll, in der Ansicht „Sendung“.
 - brocast (Station): **Seite nicht mehr senden** – „✕“ in der Ansicht „Sendung“ bzw. „Nicht mehr
   senden“ bei einer eigenen Seite. Bisher blendete „Löschen“ nur die empfangene Kopie aus, im
   Karussell blieb die Seite. Jetzt: Rücknahme an die Hörer, und derselbe Inhalt von der Quelle

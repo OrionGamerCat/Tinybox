@@ -270,6 +270,14 @@ Frames in der Direwolf-Queue), dem Budget, den nächsten Seiten und den zuletzt 
 Zeit = Übergabe an Direwolf wie im Sendeprotokoll; bei KISS ist die Restzeit berechnet. Die
 Oberfläche fragt jede Sekunde, solange gesendet wird, sonst alle 5 s.
 
+**Bake (Station):** `[beacon]` in `brocastd.conf` sendet alle `interval_min` Minuten (Standard
+30, mindestens 5, 0 = aus; die erste beim Start) einen UI-Frame im Klartext an `dest` (Standard
+`BEACON`), z. B. „OE3GAS-5: brocast - Teletext-Seiten ueber Packet Radio …“ – so sieht jeder am
+Terminal oder Monitor, was hier sendet. Text frei (`text`, höchstens 250 Bytes, ASCII empfohlen,
+Platzhalter `{call}` `{version}` `{pages}`). Die Bake geht nie mitten in eine Seite, zählt zur
+Airtime, wird aber vom Budget nicht zurückgehalten; sie steht im Sendeprotokoll und unter
+„Zuletzt gesendet“.
+
 **Seite nicht mehr senden:** „✕“ bei „Als Nächstes“ (oder „Nicht mehr senden“ bei einer eigenen
 Seite) nimmt sie aus der Sendung: Die Hörer bekommen die Rücknahme und löschen sie, und schickt
 die Quelle (TinyBox-Abgleich, dxfeed) denselben Inhalt wieder, bleibt sie draußen. Erst ein
