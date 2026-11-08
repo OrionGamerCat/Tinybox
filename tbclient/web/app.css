@@ -664,7 +664,8 @@ button.danger:hover { color: var(--bad); border-color: var(--bad); }
 .gr-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; box-sizing: border-box; }
 .gr-wrap { width: 100%; max-width: 980px; margin: 0 auto; }
 .gr-svg { width: 100%; height: auto; display: block; }
-.gr-ring { fill: none; stroke: var(--line); stroke-dasharray: 2 4; }
+.gr-ring { fill: none; stroke: #1e3a8a; stroke-width: 1.5; opacity: .8; }   /* zones: dark blue, solid (08.11.2026) */
+@media (prefers-color-scheme: dark) { .gr-ring { stroke: #7fa6e6; } }
 .gr-bgtext { fill: var(--muted); font: 11px ui-monospace, Consolas, monospace;
              paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 .gr-label { fill: var(--muted); font: 11px ui-monospace, Consolas, monospace; pointer-events: none;

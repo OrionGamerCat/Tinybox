@@ -1,0 +1,2 @@
+- APRS-Netzgraph: Zonenringe dunkelblau und durchgehend, besser
+  sichtbar.
