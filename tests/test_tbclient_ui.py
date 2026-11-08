@@ -51,3 +51,25 @@ class UiSendTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OwnUiTests(unittest.TestCase):
+    """Direwolf reports our own UI frames as 'T' (monitor mode 'm') - the monitor shows them."""
+
+    def test_t_frame_with_via(self):
+        from tbclient.links import own_ui
+        f = own_ui("OE3GAS-12", "CQ", b" 1:Fm OE3GAS-12 To CQ Via OE3XBS-8,WIDE2-1* "
+                   b"<UI pid=F0 Len=14 >[19:17:25]\rBox wieder up!\r\0")
+        self.assertEqual((f.src, f.dest, f.path, f.info),
+                         ("OE3GAS-12", "CQ", ["OE3XBS-8", "WIDE2-1"], b"Box wieder up!"))
+        self.assertTrue(f.is_ui)
+
+    def test_dispatch(self):
+        from tbclient.config import Config
+        from tbclient.links import AgwPort
+        got = []
+        port = AgwPort(Config(), got.append)
+        port._dispatch("T", "OE3GAS-12", "CQ", b" 1:Fm OE3GAS-12 To CQ <UI pid=F0 Len=2 >[1:2:3]\rhi\r\0")
+        for kind in "IUS":                     # monitor text of received frames: ignored
+            port._dispatch(kind, "OE1ABC", "OE3GAS-12", b" 1:Fm OE1ABC To OE3GAS-12 <I>[1:2:3]\rx\r\0")
+        self.assertEqual([(f.src, f.info) for f in got], [("OE3GAS-12", b"hi")])

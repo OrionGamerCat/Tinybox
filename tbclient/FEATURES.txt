@@ -10,6 +10,8 @@ neu ist, steht kurz in tbclient/news/<Version>.txt - das geht als
 Bulletin in die Rubrik TBNEWS.)
 
 Zuletzt dazugekommen
+- Monitor: eigene UI-Frames (Send UI) erscheinen, sobald Direwolf sie
+  wirklich sendet (AGW-Monitor "T"); vorher zeigte der Monitor nur Empfangenes.
 - Kennung nach dem Connect (CR76): der Client sendet //TB?. Eine TinyBox
   antwortet //TB BOX (dann der Handshake, wenn der Chat-Kanal frei ist),
   ein anderer TBClient //TB CLIENT, alle anderen Stationen nichts.

@@ -838,7 +838,7 @@ class ClientCore:
             self.direct_at[f.src] = time.time()
             if len(self.direct_at) > 200:
                 del self.direct_at[min(self.direct_at, key=self.direct_at.get)]
-        if {f.src, f.dest} != {self.cfg.mycall, tb}:
+        if {f.src, f.dest} != {self.cfg.mycall, tb} and f.src != self.cfg.mycall:
             self.channel_busy_at = time.monotonic()     # others use the frequency
         # CR30: a picture someone else is sending - count what we hear of it,
         # so the progress bar shows the real state and not an estimate

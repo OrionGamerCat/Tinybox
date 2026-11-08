@@ -23,6 +23,7 @@ from prcore.termcolor import OK
 
 from prcore import linkq
 from prcore.agw import PID_NO_L3, Frame, read_frame, via_data
+from prcore.ax25.frame import ui_frame as ax25_ui_frame
 
 from . import radio
 from .config import Config
@@ -135,6 +136,28 @@ class BaseLink:
             self._set("offline", reason)
 
 
+def own_ui(cfrom: str, cto: str, data: bytes) -> radio.RawFrame | None:
+    """Direwolf's 'T' (own transmitted UI frame) as a monitor frame. The data is
+    text: " 1:Fm OE3GAS-12 To CQ Via OE3XBS-8 <UI pid=F0 Len=14 >[19:17:25]\\r"
+    then the info field and "\\r\\0"."""
+    head, sep, info = data.partition(b"]\r")
+    if not sep or not cfrom or not cto:
+        return None
+    if info.endswith(b"\0"):
+        info = info[:-1]
+    if info.endswith(b"\r"):
+        info = info[:-1]
+    path: list[str] = []
+    text = head.decode("ascii", "replace")
+    if " Via " in text:
+        path = [c.rstrip("*") for c in text.split(" Via ", 1)[1].split(" <", 1)[0].split(",") if c]
+    try:
+        raw = ax25_ui_frame(cto, cfrom, info, path=path).encode()
+    except Exception:
+        return None
+    return radio.decode(raw)
+
+
 class AgwPort:
     """The TCP link to Direwolf's AGW port, shared by all connections (CR45: up
     to 5 at once). Registers mycall, switches the raw monitor on and hands every
@@ -177,6 +200,7 @@ class AgwPort:
             self.send("R")
             self.send("X", self.cfg.mycall)
             self.send("k")
+            self.send("m")          # monitor on: Direwolf reports our own UI frames as 'T'
             self.q_supported = None                 # maybe another Direwolf now
             self.agw_up.set()
             try:
@@ -202,6 +226,13 @@ class AgwPort:
             frame = radio.decode(data[1:])
             if frame is not None:
                 self.on_frame(frame)
+            return
+        if kind == "T":                     # own UI frame, now on the air (Direwolf xmit)
+            frame = own_ui(cfrom, cto, data)
+            if frame is not None:
+                self.on_frame(frame)
+            return
+        if kind in ("I", "U", "S"):         # monitor text of received frames: 'K' has them
             return
         if kind == "X":
             if data[:1] != b"\x01":

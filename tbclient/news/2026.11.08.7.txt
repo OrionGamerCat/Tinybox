@@ -1,0 +1,2 @@
+- Monitor: eigene UI-Frames (Send UI) erscheinen,
+  sobald Direwolf sie wirklich sendet (AGW T).
