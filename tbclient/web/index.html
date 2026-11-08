@@ -295,6 +295,16 @@
       <label><input type="radio" name="histmode" value="20"> Last 20</label>
     </div>
 
+    <h3>Mention alert</h3>
+    <p class="muted">When someone writes <b>@yourcall</b> in the chat or comments on your message. Saved in this browser.</p>
+    <div class="row">
+      <label><input type="checkbox" id="nt-popup"> Popup (when the client is not in front)</label>
+      <label><input type="checkbox" id="nt-tone"> Tone: BK in CW</label>
+      <label>Pitch <select id="nt-hz"><option value="500">500 Hz</option><option value="600">600 Hz</option><option value="700">700 Hz</option><option value="800">800 Hz</option></select></label>
+      <button id="nt-test" class="sm">Test</button>
+    </div>
+    <p id="nt-note" class="muted small"></p>
+
     <h3>My APRS symbol</h3>
     <p class="muted">Shown as a badge on your avatar. Sent when you join a board (2 bytes); a change is shown to the others in the board at once. “None”: others see the symbol of your APRS beacon, if they hear it.</p>
     <div class="row"><input id="sym-search" type="search" placeholder="Search, e.g. car, house"><button id="sym-none">None</button></div>

@@ -63,6 +63,7 @@ Stand: 08.11.2026 (CR84 umgesetzt)
 | 82 | TinyBox: Sysop-Befehl `RELOAD` – `tinybox.conf` neu einlesen, ohne die User zu trennen | ✅ siehe unten |
 | 83 | TinyBox-Web-GUI: Frame-Monitor auch im AGW-Mode – gehörte Frames (Stufe 1) und eigene gesendete Frames über den Direwolf-Fork (Stufe 2) | ✅ siehe unten (Funktest offen) |
 | 84 | Kommentar auf eine Nachricht aus der History: Text statt „message #n“ | ✅ siehe unten (Funktest offen) |
+| 85 | Erwähnungs-Alarm: Popup des Betriebssystems und „BK“ in CW bei @CALL | ✅ siehe unten (Funktest offen) |
 
 ## CR2 – Emojis (erledigt 11.10.2026)
 
@@ -2694,3 +2695,37 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   wie bisher der neueste passende Beitrag vor dem Kommentar.
 - Tests: `test_clientproto.ClientProtoTests.test_history_with_event_numbers`,
   `test_tbclient…test_history_event_number`.
+
+## CR85 – Erwähnungs-Alarm: Popup und „BK“ in CW (✅ 08.11.2026, Funktest offen)
+
+### Erfassung (OE3GAS, 08.11.2026)
+
+- Schreibt jemand im Chat `@OE3GAS`, soll der Browser eine Benachrichtigung des Betriebssystems
+  zeigen (Popup mit Ton). Als Ton das CW-Zeichen „BK“ mit 60 Zeichen/Minute, im Client erzeugt.
+
+### Umsetzung (nur Client 2026.11.08.12)
+
+- Auslöser wie die Hervorhebung aus CR15: `@CALL` (beliebige SSID) in einer fremden Live-Zeile
+  oder ein Kommentar (CR31) auf einen eigenen Beitrag. History-Zeilen, eigene Zeilen und alles,
+  was beim Öffnen eines Boards schon da ist, lösen nichts aus.
+- **Popup** über die Notification API des Browsers – nur wenn der Client nicht vorne ist
+  (Tab im Hintergrund, anderes Fenster). Titel `OE3TEC in TREFF`, Text die Zeile (max. 180
+  Zeichen), Icon `logo.svg` als PNG. Kommen mehrere auf einmal: die letzte mit „(+n)“. Klick
+  holt das Fenster nach vorne und springt in den Kanal.
+- **Ton** „BK“ (`-... -.-`) über WebAudio: 60 BpM = 12 WpM, Punkt 100 ms, 3 Punkte zwischen B
+  und K, 2,1 s; 5-ms-Rampen gegen Klicken, Tonhöhe 500–800 Hz. Er kommt auch, wenn der Client
+  vorne ist. Mit Ton ist das Popup `silent` – sonst käme zusätzlich der Systemton.
+- Einstellungen unter Settings > „Mention alert“ (Popup, Ton, Tonhöhe, Test), gespeichert im
+  Browser (`localStorage` `tbc-notify`), Standard aus. Beim Einschalten des Popups fragt der
+  Browser einmal um Erlaubnis.
+- Grenzen:
+  - Popups gehen nur in einem „sicheren Kontext“: `http://127.0.0.1:7744` ja, die LAN-Adresse
+    (`http://192.168.…:7744`) nein – dort steht ein Hinweis, der Ton geht trotzdem.
+  - Ist der Browser oder der Tab zu, kommt nichts (kein Web Push).
+  - Nur der Kanal, der gerade in der GUI offen ist (die GUI holt nur dessen Zustand).
+  - Das Betriebssystem muss Benachrichtigungen für den Browser erlauben (macOS: eigene
+    Freigabe für Chrome). Unter Linux hängt das Aussehen vom Desktop ab.
+  - Den Ton spielt der Browser erst nach einem Klick in die Seite (Autoplay-Regel).
+- Geprüft mit TinyBox + Client über den Telnet-Testport und einem zweiten User (Playwright):
+  Zeile ohne Erwähnung → nichts; `hallo @oe3gas …` → ein Popup `OE3TEC in TREFF`, ein BK; ist
+  das Fenster vorne → nur BK.

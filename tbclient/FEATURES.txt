@@ -198,6 +198,11 @@ Chat
 - _fett_ und `Monospace` (fuer ASCII-Art).
 - Internet-Adressen im Text sind anklickbar.
 - @RUFZEICHEN hebt einen Beitrag beim Angesprochenen farbig hervor.
+- Erwaehnungs-Alarm (CR85): bei @RUFZEICHEN oder einem Kommentar auf den
+  eigenen Beitrag ein Popup des Betriebssystems (nur wenn der Client nicht
+  vorne ist) und/oder "BK" in CW (60 BpM, 500-800 Hz). Einschalten unter
+  Settings > "Mention alert", gilt je Browser. Popups nur unter
+  http://127.0.0.1:7744 oder HTTPS.
 - Die eigene Reaktion erscheint sofort.
 - "Leave" verlaesst das Board direkt aus dem Chat.
 

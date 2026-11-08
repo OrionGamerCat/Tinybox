@@ -3041,6 +3041,135 @@ function openTerm() {
   setView("term");
 }
 
+// ---------------------------------------------------------------- mention alert (CR85)
+// "@MYCALL" or a comment on my message -> OS popup (Notification API) and/or
+// "BK" in CW (WebAudio, 60 letters/min = 12 WpM, dit 100 ms). Popup only when
+// the page is not in front; the tone also when it is. Settings per browser.
+const NOTIFY_KEY = "tbc-notify";
+let notifyCfg = { popup: false, tone: false, hz: 700 };
+try { Object.assign(notifyCfg, JSON.parse(localStorage.getItem(NOTIFY_KEY) || "{}")); } catch (e) { /* ok */ }
+const notifySeen = new Map();          // "<ch>:<board>" -> newest live id already looked at
+let audioCtx = null, notifyIcon = null;
+
+function saveNotify() {
+  try { localStorage.setItem(NOTIFY_KEY, JSON.stringify(notifyCfg)); } catch (e) { /* ok */ }
+}
+function wakeAudio() {                 // the browser lets a page play only after a click
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  } catch (e) { audioCtx = null; }
+}
+function playBK() {
+  wakeAudio();
+  if (!audioCtx) return;
+  const U = 0.1, a = audioCtx, o = a.createOscillator(), g = a.createGain();
+  o.frequency.value = notifyCfg.hz || 700;
+  o.connect(g); g.connect(a.destination);
+  let t = a.currentTime + 0.05;
+  g.gain.setValueAtTime(0, t);
+  // B -...  K -.-   1 unit between elements, 3 between the letters
+  const seq = [3, -1, 1, -1, 1, -1, 1, -3, 3, -1, 1, -1, 3];
+  for (const d of seq) {
+    const len = Math.abs(d) * U;
+    if (d > 0) {                       // 5 ms ramps: no clicks
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.25, t + 0.005);
+      g.gain.setValueAtTime(0.25, t + len - 0.005);
+      g.gain.linearRampToValueAtTime(0, t + len);
+    }
+    t += len;
+  }
+  o.start(); o.stop(t + 0.05);
+}
+function loadNotifyIcon() {            // logo.svg as PNG: not every OS shows an SVG icon
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const c = document.createElement("canvas");
+      c.width = c.height = 128;
+      c.getContext("2d").drawImage(img, 0, 0, 128, 128);
+      notifyIcon = c.toDataURL("image/png");
+    } catch (e) { notifyIcon = "/logo.svg"; }
+  };
+  img.src = "/logo.svg";
+}
+const canPopup = () => "Notification" in window && window.isSecureContext;
+
+function isForMe(m) {
+  if (m.kind !== "line" || isHistory(m) || m.pending || m.call === S.mycall) return false;
+  const wire = m.text || "";
+  const qm = quoteOf(wire);
+  const body = qm ? wire.slice(qm.len) : wire;
+  const ir = imageRef(body);
+  if (mentionsMe(wireToText(ir ? ir.caption : body))) return true;
+  if (!qm) return false;
+  const orig = quotedMessage(qm, m);
+  return baseCall((orig && orig.call) || qm.call || "") === baseCall(S.mycall);
+}
+function checkMentions() {
+  if (!S || !S.board || !(notifyCfg.popup || notifyCfg.tone)) return;
+  const key = `${activeCh}:${S.board.n}`;
+  const live = S.messages.filter((m) => !isHistory(m));
+  const top = live.reduce((a, m) => Math.max(a, m.id), -Infinity);
+  if (!notifySeen.has(key)) { notifySeen.set(key, top); return; }   // what was there before
+  const last = notifySeen.get(key);
+  const hits = live.filter((m) => m.id > last && isForMe(m));
+  notifySeen.set(key, Math.max(last, top));
+  if (!hits.length) return;
+  if (notifyCfg.tone) playBK();
+  const away = document.hidden || !document.hasFocus();
+  if (!notifyCfg.popup || !away || !canPopup() || Notification.permission !== "granted") return;
+  const m = hits[hits.length - 1];
+  const text = wireToText(stripQuote(m.text || "")).replace(/\s+/g, " ").trim();
+  showPopup(`${m.call} in ${S.board.name}` + (hits.length > 1 ? ` (+${hits.length - 1})` : ""),
+            text || "commented on your message", activeCh);
+}
+function showPopup(title, body, ch) {
+  try {
+    const n = new Notification(title, {
+      body: body.slice(0, 180), icon: notifyIcon || "/logo.svg",
+      tag: "tbc-mention", renotify: true, silent: !!notifyCfg.tone,   // our BK instead of the OS sound
+    });
+    n.onclick = () => { window.focus(); if (ch !== null && ch !== activeCh) switchCh(ch); n.close(); };
+  } catch (e) { /* e.g. Android Chrome: only via a service worker */ }
+}
+function renderNotify() {
+  $("nt-popup").checked = !!notifyCfg.popup;
+  $("nt-tone").checked = !!notifyCfg.tone;
+  $("nt-hz").value = String(notifyCfg.hz || 700);
+  let note = "";
+  if (!canPopup()) note = "Popups need the address http://127.0.0.1:7744 (or HTTPS) - not possible at this address.";
+  else if (Notification.permission === "denied") note = "The browser blocks popups for this page. Allow them in the site settings (lock icon left of the address).";
+  else if (notifyCfg.popup) note = "No popup? Allow notifications for your browser in the operating system (Windows: Settings > System > Notifications, macOS: System Settings > Notifications).";
+  $("nt-note").textContent = note;
+}
+function initNotify() {
+  loadNotifyIcon();
+  document.addEventListener("pointerdown", () => { if (notifyCfg.tone) wakeAudio(); }, { once: true });
+  $("nt-popup").onchange = async (e) => {
+    notifyCfg.popup = e.target.checked;
+    if (notifyCfg.popup && canPopup() && Notification.permission === "default") {
+      try { await Notification.requestPermission(); } catch (err) { /* old browser */ }
+    }
+    if (notifyCfg.popup && (!canPopup() || Notification.permission === "denied")) notifyCfg.popup = false;
+    saveNotify(); renderNotify();
+  };
+  $("nt-tone").onchange = (e) => { notifyCfg.tone = e.target.checked; if (notifyCfg.tone) wakeAudio(); saveNotify(); };
+  $("nt-hz").onchange = (e) => {
+    notifyCfg.hz = Math.max(400, Math.min(1000, parseInt(e.target.value, 10) || 700));
+    saveNotify(); renderNotify();
+  };
+  $("nt-test").onclick = () => {
+    playBK();
+    if (notifyCfg.popup && canPopup() && Notification.permission === "granted") {
+      setTimeout(() => showPopup("TinyBox test", `@${S ? S.mycall : "CALL"} this is how a mention looks.`, null), 3000);
+      $("nt-note").textContent = "The test popup comes in 3 seconds - switch to another window to see it like a real one.";
+    }
+  };
+  renderNotify();
+}
+
 // ---------------------------------------------------------------- polling
 async function poll() {
   let since = -1;
@@ -3061,6 +3190,7 @@ async function poll() {
       if (endAt !== lastEndAt) { lastEndAt = endAt; if (!$("sheet").classList.contains("hidden")) loadConnlog(); }
       since = S.version;
       render();
+      checkMentions();                                   // CR85
       if (!$("sheet").classList.contains("hidden")) renderSymbols();
       if (linkCall) renderLink();
     } catch (e) {
@@ -3225,6 +3355,7 @@ async function start() {
   $("chat").addEventListener("scroll", () => {
     if (performance.now() > ignoreChatScrollUntil) closeReactBar();   // CR23
   });
+  initNotify();                                               // CR85
   poll();
 }
 start();

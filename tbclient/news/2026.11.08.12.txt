@@ -1,0 +1,2 @@
+- Neu: Alarm bei @DEINCALL im Chat - Popup und/oder
+  "BK" in CW. Settings > Mention alert.
