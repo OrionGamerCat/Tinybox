@@ -1,0 +1,2 @@
+- Fix: Chatboard zeigte "Invalid Date" und "true"
+  statt der Nachrichten.

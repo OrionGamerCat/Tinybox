@@ -2382,7 +2382,7 @@ function peerQuality(q, c) {
 }
 
 let peerChatKey = "";
-function bubble(kind, text, t) {
+function peerBubble(kind, text, t) {
   const b = el("div", "pb " + kind);
   b.append(el("div", "pb-t", text || " "), el("div", "pb-time", hhmm(t)));
   return b;
@@ -2400,7 +2400,7 @@ function renderPeerChat(lines) {
     peerChatKey = key;
     termShown = S.term_n || 0;
     out.replaceChildren(...pc.msgs.map((m) => m.dir === "note" ? el("div", "pb sys", m.text)
-      : bubble(m.dir, m.text, m.t)));
+      : peerBubble(m.dir, m.text, m.t)));
     if (first || atBottom) out.scrollTop = out.scrollHeight;
     return;
   }
@@ -2417,7 +2417,7 @@ function renderPeerChat(lines) {
     const key = activeCh + ":" + n;
     if (!peerSeen[key]) peerSeen[key] = now;
     if (kind === "sys") continue;                 // online, disconnected ...: top bar
-    out.append(bubble(kind, text, peerSeen[key]));
+    out.append(peerBubble(kind, text, peerSeen[key]));
   }
   termShown = Math.max(termShown, S.term_n || 0);
   while (out.childNodes.length > 600) out.firstChild.remove();
