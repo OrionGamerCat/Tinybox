@@ -66,3 +66,48 @@ class TxStateTests(unittest.IsolatedAsyncioTestCase):
         tx = self.car.tx_state()
         self.assertEqual(tx["blocked"]["reason"], "budget")
         self.assertEqual(tx["blocked"]["waiting"], 1)
+
+
+class TakeOffAirTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.clock = Clock()
+
+        async def send(data: bytes) -> bool:
+            return True
+
+        async def sleep(s: float) -> None:
+            pass
+
+        self.st, self.store = make_station(self.clock)
+        self.car = Carousel(self.store, send, self.st.cfg.station, "OE3GAS-5", self.clock,
+                            mono=lambda: 0.0, sleep=sleep)
+
+    async def test_off_air_stays_off_until_new_content(self):
+        self.st.sync("tinybox", {"26": BULLETIN})
+        page_id = self.store.get_page("tinybox", "26").id
+        self.st.take_off_air(page_id)
+        self.assertEqual(self.store.get_page("tinybox", "26").state, "withdrawn")
+        for _ in range(10):                      # the withdrawal goes out, then the page is gone
+            await self.car.step()
+            self.clock.t += 600
+        self.assertIsNone(self.store.get_page("tinybox", "26"))
+        res = self.st.sync("tinybox", {"26": BULLETIN})       # TinyBox still has it
+        self.assertTrue(res["pages"]["26"]["blocked"])
+        self.assertIsNone(self.store.get_page("tinybox", "26"))
+        self.assertEqual(len(self.car.tx_state()["next"]), 0)
+        changed = {**BULLETIN, "ti": "geändert"}
+        self.st.sync("tinybox", {"26": changed})               # new content: back on the air
+        self.assertEqual(self.store.get_page("tinybox", "26").state, "active")
+        self.assertEqual(self.store.list_blocked(), [])
+
+    async def test_restore_and_guard(self):
+        self.st.put("tinybox", "27", BULLETIN)
+        pid = self.store.get_page("tinybox", "27").id
+        self.st.take_off_air(pid)
+        self.assertEqual(len(self.store.list_blocked()), 1)
+        self.assertTrue(self.st.restore("tinybox", "27")["restored"])
+        self.st.put("tinybox", "27", BULLETIN)
+        self.assertEqual(self.store.get_page("tinybox", "27").state, "active")
+        from brocast.station import NotFound
+        with self.assertRaises(NotFound):
+            self.st.take_off_air(9999)

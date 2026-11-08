@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- brocast (Station): **Seite nicht mehr senden** – „✕“ in der Ansicht „Sendung“ bzw. „Nicht mehr
+  senden“ bei einer eigenen Seite. Bisher blendete „Löschen“ nur die empfangene Kopie aus, im
+  Karussell blieb die Seite. Jetzt: Rücknahme an die Hörer, und derselbe Inhalt von der Quelle
+  (TinyBox-Abgleich, dxfeed) bleibt draußen (Tabelle `blocked`); neuer Inhalt oder „Wieder senden“
+  bringt sie zurück.
 - brocast-Web-GUI (Station): **Sendestatus** – Feld in der Kopfzeile („ON AIR P120 … 3/7“ mit
   Fortschritt, sonst nächste Seite mit Countdown, Pause bei vollem Budget, kein Sender) und neue
   Ansicht **„Sendung“**: Seite auf Sendung mit Teilen, Bytes, Airtime, Restzeit, Direwolf-Queue,

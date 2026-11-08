@@ -293,6 +293,7 @@ class Carousel:
             typ, title = title_of(row.content)
             n = self.store.frame_count(row.pid)
             nxt.append({"id": row.id, "title": title, "typ": typ, "pri": row.pri,
+                        "provider": row.provider, "key": row.pkey,
                         "parts": n, "next_tx": None if row.next_tx >= RESTING else row.next_tx,
                         "resting": row.next_tx >= RESTING, "withdrawn": row.state == "withdrawn",
                         "new": row.tx_count == 0})

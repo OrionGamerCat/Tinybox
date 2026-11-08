@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -40,6 +41,7 @@ INGEST_ONLY = ("parts", "born")                  # only for brocastd, never on a
 # with raw numbers (no dictionary type for "index" yet), cat as pages carry it:
 # dictionary number or own text. Validity a week: the list changes rarely and the
 # page is confirmed with every sync.
+log = logging.getLogger(__name__)
 INDEX_PROVIDER = "brocastd"
 INDEX_KEY = "rubrics"
 INDEX_DAT_RUBRICS = 0
@@ -160,6 +162,14 @@ class Station:
                 raise BrocastError(f"Seitennummer {fixed_id} ist bereits vergeben")
         body = {k: v for k, v in content.items() if k != "id"}
 
+        blocked = self.store.blocked_hash(provider, key)
+        if blocked is not None:
+            if blocked == h:                       # the sysop took it off the air: stays off
+                return {"provider": provider, "key": key, "blocked": True, "changed": False,
+                        "id": row.id if row else None}
+            self.store.unblock(provider, key)      # new content: the provider means it
+            log.info("Seite %s/%s: neuer Inhalt, wieder im Karussell", provider, key)
+
         if row and row.state == "active" and row.content_hash == h:
             frames, hdr = self._frames(body, row.id, row.rev, now)  # confirm: refresh t only
             row.t = now
@@ -223,6 +233,26 @@ class Station:
         self.store.save_page(row, frames)
         self.on_change()
         return self._result(row, frames, changed=True)
+
+    def take_off_air(self, page_id: int) -> dict[str, Any]:
+        """The sysop (web GUI, view "Sendung"): this page is not sent any more.
+        The listeners get the withdrawal (so they drop it); a provider that sends
+        the same content again (TinyBox full sync, dxfeed) is ignored - only new
+        content brings the page back (or restore())."""
+        row = self.store.get_page_by_id(page_id)
+        if row is None:
+            raise NotFound(f"Seite {page_id} ist nicht im Karussell")
+        if row.provider == INDEX_PROVIDER:
+            raise BrocastError("Seiten von brocastd selbst (Rubriken, Dictionary) bleiben im Karussell")
+        content = json.loads(row.content)
+        self.store.block(row.provider, row.pkey, row.content_hash, row.id,
+                         str(content.get("ti", "")), int(self.clock()))
+        log.info("Seite %s (%s/%s) vom Sysop aus der Sendung genommen", row.id, row.provider, row.pkey)
+        return self.delete(row.provider, row.pkey)
+
+    def restore(self, provider: str, key: str) -> dict[str, Any]:
+        """Undo take_off_air: the provider's next full sync brings it back."""
+        return {"provider": provider, "key": key, "restored": self.store.unblock(provider, key)}
 
     def sync(self, provider: str, pages: Any, rubrics: Any = None) -> dict[str, Any]:
         """Full list of a provider's current pages; missing ones are withdrawn.

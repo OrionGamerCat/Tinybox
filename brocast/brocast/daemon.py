@@ -65,6 +65,7 @@ class Daemon:
         self.listener.install_dictionary = self.install_received
         self.web.dict_broadcast = self.broadcast_dictionary_now
         self.web.tx_status = self.tx_status                 # view "Sendung" (station)
+        self.web.tx_action = self.tx_action
         self.carousel: Carousel | None = None
         self.station: Station | None = None
         self.ingest: IngestServer | None = None
@@ -293,7 +294,26 @@ class Daemon:
             return {"station": False}
         return {"station": True, "connected": self.link.connected.is_set(),
                 "interface": self.cfg.direwolf.describe(),
-                "pages": len(self.store.list_pages()), **self.carousel.tx_state()}
+                "pages": len(self.store.list_pages()), **self.carousel.tx_state(),
+                "off_air": self.store.list_blocked()}
+
+    def tx_action(self, action: str, body: Any) -> dict[str, Any]:
+        """View "Sendung": take a page off the air / send it again."""
+        if not (self.station and self.carousel):
+            raise BrocastError("nur eine Station sendet")
+        if not isinstance(body, dict):
+            raise BrocastError("Objekt erwartet")
+        if action == "off":
+            page_id = body.get("id")
+            if not isinstance(page_id, int) or isinstance(page_id, bool):
+                raise BrocastError("id (Seitennummer) erwartet")
+            res = self.station.take_off_air(page_id)
+            self.carousel.wake()
+            return {"ok": True, **res}
+        if action == "restore":
+            res = self.station.restore(str(body.get("provider", "")), str(body.get("key", "")))
+            return {"ok": res["restored"], **res}
+        raise BrocastError(f"unbekannte Aktion {action!r}")
 
     def status(self) -> dict[str, Any]:
         now = self.clock()

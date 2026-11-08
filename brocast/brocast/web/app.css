@@ -823,7 +823,13 @@ a.extlink:hover { color: var(--accent-dark); }
 .txlist .r { display: grid; align-items: center; column-gap: 12px; padding: 10px 16px; border-top: 1px solid var(--rule);
              font-size: 14px; }
 .txlist .r:first-child { border-top: 0; }
-.txlist.next .r { grid-template-columns: 58px minmax(0, 1fr) auto 64px; }
+.txlist.next .r { grid-template-columns: 58px minmax(0, 1fr) auto 64px 30px; }
+.txlist.off .r { grid-template-columns: 58px minmax(0, 1fr) auto auto; }
+.txlist.off .pg, .txlist.off .ti { color: var(--ink-3); text-decoration: line-through; }
+.txcard h3.bar.sub { font-size: 14px; border-top: 2px solid var(--ink); background: var(--paper-2); }
+.offbtn { width: 30px; height: 30px; border: 2px solid var(--danger); color: var(--danger); background: var(--paper);
+          border-radius: 5px; font-weight: 700; cursor: pointer; padding: 0; }
+.offbtn:hover { background: var(--danger); color: #fff; }
 .txlist.last .r { grid-template-columns: 76px 54px minmax(0, 1fr) auto; }
 .txlist .pg { font: 700 14px var(--mono); color: var(--accent); }
 .txlist.last .pg { color: var(--ink); }

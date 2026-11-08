@@ -48,6 +48,15 @@ CREATE TABLE IF NOT EXISTS pages (
     rev_t         INTEGER NOT NULL DEFAULT 0,  -- Unix time the content was born (aging)
     UNIQUE (provider, pkey)
 );
+CREATE TABLE IF NOT EXISTS blocked (          -- vom Sysop aus der Sendung genommen (08.11.2026)
+    provider      TEXT NOT NULL,
+    pkey          TEXT NOT NULL,
+    content_hash  TEXT NOT NULL,               -- gilt fuer diesen Inhalt; neuer Inhalt = wieder senden
+    id            INTEGER,
+    title         TEXT NOT NULL DEFAULT '',
+    t             INTEGER NOT NULL,
+    PRIMARY KEY (provider, pkey)
+);
 CREATE TABLE IF NOT EXISTS frames (
     pid  INTEGER NOT NULL REFERENCES pages(pid) ON DELETE CASCADE,
     n    INTEGER NOT NULL,                     -- subpage number, 1..m
@@ -246,6 +255,29 @@ class Store:
         row = self.db.execute("SELECT * FROM pages WHERE provider=? AND pkey=?",
                               (provider, pkey)).fetchone()
         return PageRow(**dict(row)) if row else None
+
+    def get_page_by_id(self, page_id: int) -> PageRow | None:
+        row = self.db.execute("SELECT * FROM pages WHERE id=?", (page_id,)).fetchone()
+        return PageRow(**dict(row)) if row else None
+
+    # -- pages the sysop took off the air -------------------------------------
+
+    def block(self, provider: str, pkey: str, content_hash: str, page_id: int, title: str,
+              now: int) -> None:
+        self.db.execute("INSERT OR REPLACE INTO blocked VALUES (?, ?, ?, ?, ?, ?)",
+                        (provider, pkey, content_hash, page_id, title, now))
+
+    def unblock(self, provider: str, pkey: str) -> bool:
+        return self.db.execute("DELETE FROM blocked WHERE provider=? AND pkey=?",
+                               (provider, pkey)).rowcount > 0
+
+    def blocked_hash(self, provider: str, pkey: str) -> str | None:
+        row = self.db.execute("SELECT content_hash FROM blocked WHERE provider=? AND pkey=?",
+                              (provider, pkey)).fetchone()
+        return row["content_hash"] if row else None
+
+    def list_blocked(self) -> list[dict]:
+        return [dict(r) for r in self.db.execute("SELECT * FROM blocked ORDER BY t DESC")]
 
     def get_page_by_pid(self, pid: int) -> PageRow | None:
         row = self.db.execute("SELECT * FROM pages WHERE pid=?", (pid,)).fetchone()

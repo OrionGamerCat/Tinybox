@@ -487,9 +487,12 @@ function renderPage(p) {
     buttons.push(gr);
   }
   buttons.push(raw);
-  const del = el("button", "btn sm danger", "Löschen");
+  const own = state.status.mode === "station" && p.org === state.status.callsign;
+  const del = el("button", "btn sm danger", own ? "Nicht mehr senden" : "Löschen");
   del.onclick = async () => {
-    if (!confirm(`Seite ${p.id} von ${p.org} löschen?\nSie kommt erst mit einer neuen Revision wieder.`)) return;
+    if (own) {                            // our own page: off the air, not only out of the list
+      if (!await takeOffAir(p.id, p.ti)) return;
+    } else if (!confirm(`Seite ${p.id} von ${p.org} löschen?\nSie kommt erst mit einer neuen Revision wieder.`)) return;
     await action("DELETE", `/pages/${encodeURIComponent(p.org)}/${p.id}`, undefined, null);
     state.selected = null;
     renderEmpty();
@@ -2409,6 +2412,22 @@ function renderTxHeader() {
   air.replaceChildren("Airtime ", gauge, el("b", "mono", `${mins(b.used_s)}/${mins(b.limit_s)} min`));
 }
 
+/* The sysop takes one of the station's pages off the air: the listeners get the
+ * withdrawal, the same content from the provider (TinyBox sync, dxfeed) stays
+ * off; new content brings it back - or "Wieder senden". */
+async function takeOffAir(id, title) {
+  if (!confirm(`Seite ${id}${title ? " „" + title + "“" : ""} nicht mehr senden?\n\n` +
+               "Die Hörer bekommen die Rücknahme und löschen sie. Schickt die Quelle (TinyBox, dxfeed) " +
+               "denselben Inhalt wieder, bleibt sie aus der Sendung – erst ein geänderter Inhalt kommt wieder. " +
+               "Endgültig weg ist ein Bulletin erst, wenn es auch in der TinyBox gelöscht ist.")) return false;
+  try {
+    await api("POST", "/tx/off", { id });
+    toast(`Seite ${id} wird nicht mehr gesendet.`);
+    await refreshTx();
+    return true;
+  } catch (e) { toast(e.message, true); return false; }
+}
+
 async function renderTx() {
   state.screen = "tx";
   state.selected = null;
@@ -2498,11 +2517,36 @@ function renderTxView() {
     if (p.new && !p.resting) ti.append(" ", el("span", "tag upd", "neu"));
     if (p.withdrawn) ti.append(" ", el("span", "tag old", "zurückgezogen"));
     if (p.pri >= 3) ti.append(" ", el("span", "tag alarm", "Notfall"));
+    const off = el("button", "offbtn", "✕");
+    off.type = "button";
+    off.title = "Nicht mehr senden";
+    off.setAttribute("aria-label", `Seite ${p.id} nicht mehr senden`);
+    off.onclick = () => takeOffAir(p.id, p.title);
+    const keep = p.provider === "brocastd" || p.withdrawn;      // own index/dictionary; already going
     row.append(el("span", "pg", `P${p.id}`), ti, el("span", "meta", `${p.parts} Tl`),
-      el("span", "when", p.resting ? "–" : p.next_tx <= tx.now ? "gleich" : mmss(p.next_tx - tx.now)));
+      el("span", "when", p.resting ? "–" : p.next_tx <= tx.now ? "gleich" : mmss(p.next_tx - tx.now)),
+      keep ? el("span") : off);
     nl.append(row);
   }
   nx.append(nl);
+  if (tx.off_air && tx.off_air.length) {            // taken off the air by the sysop
+    nx.append(el("h3", "bar sub", "Nicht gesendet (vom Sysop genommen)"));
+    const ol = el("div", "txlist off");
+    for (const b of tx.off_air) {
+      const row = el("div", "r");
+      const again = el("button", "btn sm", "Wieder senden");
+      again.type = "button";
+      again.title = "Kommt mit dem nächsten Abgleich der Quelle wieder ins Karussell";
+      again.onclick = async () => {
+        try { await api("POST", "/tx/restore", { provider: b.provider, key: b.pkey }); toast("Kommt mit dem nächsten Abgleich der Quelle wieder."); refreshTx(); }
+        catch (e) { toast(e.message, true); }
+      };
+      row.append(el("span", "pg", b.id ? `P${b.id}` : ""), el("span", "ti", b.title || `${b.provider}/${b.pkey}`),
+        el("span", "meta", b.provider), again);
+      ol.append(row);
+    }
+    nx.append(ol);
+  }
   // last sent
   const ls = el("section", "txcard flush");
   ls.append(el("h3", "bar", "Zuletzt gesendet"));

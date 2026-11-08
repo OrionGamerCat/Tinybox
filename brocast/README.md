@@ -270,11 +270,19 @@ Frames in der Direwolf-Queue), dem Budget, den nächsten Seiten und den zuletzt 
 Zeit = Übergabe an Direwolf wie im Sendeprotokoll; bei KISS ist die Restzeit berechnet. Die
 Oberfläche fragt jede Sekunde, solange gesendet wird, sonst alle 5 s.
 
+**Seite nicht mehr senden:** „✕“ bei „Als Nächstes“ (oder „Nicht mehr senden“ bei einer eigenen
+Seite) nimmt sie aus der Sendung: Die Hörer bekommen die Rücknahme und löschen sie, und schickt
+die Quelle (TinyBox-Abgleich, dxfeed) denselben Inhalt wieder, bleibt sie draußen. Erst ein
+geänderter Inhalt kommt wieder – oder „Wieder senden“. Ein Bulletin ist endgültig weg, wenn es
+auch in der TinyBox gelöscht ist. Das einfache „Löschen“ einer fremden Seite blendet sie nur
+in der eigenen Liste aus.
+
 Die Rohdaten liefert weiterhin die JSON-API:
 
 | Adresse | Inhalt |
 | --- | --- |
 | `http://127.0.0.1:7733/api/v1/status` | Status |
+| `POST /api/v1/tx/off {"id": n}` · `POST /api/v1/tx/restore {"provider", "key"}` | Station: Seite aus der Sendung nehmen / wieder senden |
 | `http://127.0.0.1:7733/api/v1/tx` | Station: was gerade gesendet wird (Seite, Teil n/gesamt), was als Nächstes kommt, zuletzt gesendet, Airtime-Budget – aktualisiert bei jeder Übergabe eines Frames an Direwolf |
 | `http://127.0.0.1:7733/api/v1/categories` | Rubriken mit Anzahl/ungelesen (auch leere, die eine Station ankündigt) |
 | `http://127.0.0.1:7733/api/v1/rubrics` | alle Rubriken für die Abo-Matrix, mit Beschreibung und `stations` |
