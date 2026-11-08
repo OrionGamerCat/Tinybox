@@ -719,6 +719,31 @@ button.danger:hover { color: var(--bad); border-color: var(--bad); }
 .mailview.hidden { display: none !important; }
 .nav-item .cnt { margin-left: 4px; }
 
+/* CR80: TBClient view, third column (PC from 1000 px) and the speed test question */
+.peer-side { display: none; width: 190px; flex: none; border-left: 1px solid var(--line); padding: 8px;
+  background: var(--surface); overflow-y: auto; font-size: 13px; }
+.sec-peer { --sec: #1f6fd1; }
+.peer-side .navsec { margin-bottom: 10px; padding-bottom: 8px; }
+.peer-side .ps-item { display: flex; flex-direction: column; gap: 3px; margin: 8px 8px 0; }
+.peer-side .ps-btn { border-radius: 16px; padding: 5px 10px; font-weight: 600; font-size: 13px; }
+.peer-side .ps-btn:hover:not(:disabled) { background: var(--bg); }
+.peer-side .ps-btn:disabled { opacity: .5; cursor: default; }
+.peer-side .ps-btn.danger { border-color: var(--bad); color: var(--bad); }
+.peer-side .ps-res { text-align: center; font: 12px ui-monospace, Consolas, monospace; }
+.peer-side .ps-res.ago { font: 11px system-ui, sans-serif; }
+.peer-side .ph-move { display: inline-block; padding: 1px 9px; border-radius: 10px; font: 700 12px system-ui, sans-serif;
+  border: 1.5px solid #111; animation: ph-move 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .peer-side .ph-move { animation: none; background: #111; color: #fff; } }
+.st-dlg { width: min(440px, calc(100vw - 32px)); border: 0; border-radius: 12px; padding: 22px 24px;
+  background: var(--surface); color: var(--text); box-shadow: 0 12px 40px rgba(0, 0, 0, .3); }
+.st-dlg::backdrop { background: rgba(17, 24, 33, .45); }
+.st-dlg h2 { margin: 0 0 12px; font-size: 18px; }
+.st-dlg p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; }
+.st-facts2 { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg); font: 13px ui-monospace, Consolas, monospace; }
+.st-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.st-btns button { border-radius: 19px; padding: 8px 18px; font-weight: 600; }
+
 /* --- layout by window width (must stay at the end) ------------------------ */
 @media (min-width: 700px) {
   #app { max-width: 1400px; }
@@ -781,3 +806,8 @@ button.danger:hover { color: var(--bad); border-color: var(--bad); }
 .chess-new { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 520px) { .chess-board { grid-template-columns: repeat(8, 11vw); grid-template-rows: repeat(8, 11vw); }
   .csq { font-size: 7vw; } .peer-head .ph-map { width: 140px; height: 84px; } }
+@media (min-width: 1000px) {        /* CR80: three columns with a TBClient */
+  #app.view-term.peer-wide .peer-side { display: block; }
+  #app.view-term.peer-wide .ph-fun, #app.view-term.peer-wide #peer-heard,
+  #app.view-term.peer-wide #peer-clear { display: none !important; }
+}

@@ -10,6 +10,11 @@ neu ist, steht kurz in tbclient/news/<Version>.txt - das geht als
 Bulletin in die Rubrik TBNEWS.)
 
 Zuletzt dazugekommen
+- TBClient-Ansicht in drei Spalten (CR80, PC ab 1000 px): rechts Ping, Speed
+  test, Chess, QSL, Heard there, Delete history untereinander, unter jedem
+  der letzte Wert - je Gegenstation gemerkt, auch nach neuem Connect - oder
+  "-". Speed test fragt vorher, wie lange der Kanal belegt ist. Schmaler
+  bleibt die Knopfzeile unter dem Profil.
 - Monitor: eigene UI-Frames (Send UI) erscheinen, sobald Direwolf sie
   wirklich sendet (AGW-Monitor "T"); vorher zeigte der Monitor nur Empfangenes.
 - Kennung nach dem Connect (CR76): der Client sendet //TB?. Eine TinyBox

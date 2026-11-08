@@ -2323,7 +2323,8 @@ function renderPeer(c, mon) {
   $("peer-raw").classList.toggle("hidden", !p);
   $("peer-raw").textContent = pv ? "Terminal" : "TBClient view";
   $("peer-head").classList.toggle("hidden", !p || !pv);
-  if (p && pv) renderPeerHead(c, p);
+  $("app").classList.toggle("peer-wide", !!p && pv);       // CR80: third column on the PC
+  if (p && pv) { renderPeerHead(c, p); renderPeerSide(c, p); }
   if (!p) return;
   const pr = p.prof || {};
   const parts = [`TBClient ${p.v || "?"}` + (p.newer ? " (newer)" : "")];
@@ -2471,7 +2472,7 @@ function peerFunRow(f, c) {
   const fun = (act, arg) => api("peer/fun", { ch: activeCh, act, arg });
   row.append(
     btn("Ping", "Round trip time to the other station", () => fun("ping"), f.pinging),
-    btn("Speed test", "1 kB each way, net bytes per second", () => fun("speed"),
+    btn("Speed test", "1 kB each way, net bytes per second", () => speedConfirm(c, f.last && f.last.st),
         f.st && f.st.state === "running"),
     btn("♟ Chess", "Play chess over packet", () => { chessOpen = !chessOpen; render(); }),
     btn("QSL", "Send a digital QSL card (into the chat)", () => sendQsl(c)));
@@ -2492,6 +2493,78 @@ function peerFunRow(f, c) {
     row.append(d);
   }
   return row;
+}
+
+/* CR80: third column (PC, from 1000 px): the buttons one below the other, each
+ * with the last result - also from an earlier connect - or "-". */
+function agoText(t) {
+  const m = Math.round((Date.now() / 1000 - t) / 60);
+  return m < 1 ? "just now" : m < 120 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago`
+    : `${Math.round(m / 1440)} days ago`;
+}
+function renderPeerSide(c, p) {
+  const side = $("peer-side"), f = p.fun, on = c.state === "online";
+  const last = (f && f.last) || {};
+  const rt = (v) => (v < 1 ? `${Math.round(v * 1000)} ms` : `${v.toFixed(1)} s`);
+  const item = (txt, title, fn, dis, ...res) => {
+    const box = el("div", "ps-item");
+    const b = el("button", "ps-btn", txt);
+    b.type = "button"; b.title = title; b.disabled = !on || !!dis;
+    b.onclick = fn;
+    box.append(b, ...res.filter(Boolean));
+    return box;
+  };
+  const line = (cls, ...parts) => { const d = el("div", "ps-res " + cls); d.append(...parts); return d; };
+  const fun = (act, arg) => api("peer/fun", { ch: activeCh, act, arg });
+  const sec = el("section", "navsec sec-peer");
+  sec.append(el("div", "nav-h", "With " + c.target));
+  if (f) {
+    const pinged = f.pinging ? line("", "waiting for the answer ...")
+      : last.ping ? line("", rt(last.ping[0]), el("span", "muted", " · " + agoText(last.ping[1])))
+      : line("muted", "–");
+    sec.append(item("Ping", "Round trip time to the other station", () => fun("ping"), f.pinging, pinged));
+    const st = f.st && f.st.state === "running";
+    const sres = st ? line("", "running ...", f.st.out ? ` → ${f.st.out} B/s` : "")
+      : last.st ? line("", `→ ${last.st[0]} B/s ← ${last.st[1]} B/s`) : line("muted", "–");
+    sec.append(item("Speed test …", "1 kB each way, net bytes per second", () => speedConfirm(c, last.st), st,
+                    sres, !st && last.st ? line("muted ago", "tested " + agoText(last.st[2])) : null));
+    const g = f.chess;
+    const cres = g && g.my_turn ? line("", el("span", "ph-move", "♟ your move"))
+      : g && !g.result ? line("muted", `waiting for ${c.target}`) : null;
+    sec.append(item("♟ Chess", "Play chess over packet", () => { chessOpen = !chessOpen; render(); }, false, cres));
+    sec.append(item("QSL", "Send a digital QSL card (into the chat)", () => sendQsl(c), false));
+  } else {
+    sec.append(el("div", "ps-res muted", "The other TBClient has no games and tests (older version)."));
+  }
+  const ch = el("section", "navsec sec-station");
+  ch.append(el("div", "nav-h", "Channel"));
+  if (p.caps.includes("HEARD"))
+    ch.append(item("Heard there", "Ask the other TBClient which stations it hears", peerHeard, false));
+  if (p.hist) {
+    const d = item("Delete history", "Delete the chat history with this station - on both sides", peerClear, false);
+    d.firstChild.disabled = false;                 // also when not connected (then only here)
+    d.firstChild.classList.add("danger");
+    ch.append(d);
+  }
+  side.replaceChildren(sec, ...(ch.childNodes.length > 1 ? [ch] : []));
+}
+
+/* CR80: the speed test uses the channel - ask first. ~1200 Bd unless we know better. */
+function speedConfirm(c, last) {
+  const n = 1024, ch = activeCh;
+  const bps = last ? Math.max(10, Math.min(last[0], last[1])) : 120;
+  const s = Math.max(3, Math.round(n / bps));
+  const dlg = $("st-dlg");
+  $("st-h").textContent = `Start speed test with ${c.target}?`;
+  $("st-p").replaceChildren("Both stations transmit in turn, about ", el("b", "", `${s} seconds each`),
+    ` - the channel is busy for about ${2 * s} seconds. Other stations have to wait.`);
+  const facts = [el("span", "muted", "data"), el("span", "", `${n} bytes each way`)];
+  if (last) facts.push(el("span", "muted", "last test"),
+                       el("span", "", `→ ${last[0]} B/s ← ${last[1]} B/s · ${agoText(last[2])}`));
+  $("st-facts").replaceChildren(...facts);
+  dlg.onclose = () => { if (dlg.returnValue === "yes") api("peer/fun", { ch, act: "speed" }); };
+  dlg.returnValue = "";
+  dlg.showModal();
 }
 
 /* A small map without tiles: both stations, the line between them, the

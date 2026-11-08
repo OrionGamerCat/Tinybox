@@ -2427,7 +2427,7 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
 - **Kanal-Health:** roter Rand an Digis, über die viele „unchanged repeats“ laufen (Sins).
 
 
-## CR80 – TBClient-Ansicht in drei Spalten, Aktionen rechts (offen, 08.11.2026)
+## CR80 – TBClient-Ansicht in drei Spalten, Aktionen rechts (✅ 08.11.2026)
 
 ### Erfassung (OE3GAS, 08.11.2026)
 
@@ -2461,6 +2461,19 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   Knöpfen, die Werte darunter), wie heute.
 - Größe des Speed tests: **1024 Bytes** je Richtung (OE3GAS 08.11.2026, Client 2026.11.08.9;
   vorher 2048). Die Bestätigung nennt dann ca. 10 s je Richtung bei 1200 Bd.
+
+### Umsetzung (Client 2026.11.08.10)
+
+- `#peer-side` rechts (190 px wie die linke Spalte), nur im TBClient-View ab 1000 px; dort
+  verschwinden die Knopfzeile unter dem Profil und „Heard there“/„Delete history“ aus der
+  Kopfzeile. Schmaler bleibt alles wie bisher.
+- Karte „With <call>“: Ping, Speed test …, ♟ Chess, QSL, darunter der letzte Wert oder „–“;
+  „your move“ pulsierend bzw. „waiting for <call>“. Karte „Channel“: Heard there, Delete
+  history (rot, auch ohne Verbindung).
+- Letzte Ergebnisse je Gegenstation in den Settings (`fun_last`, höchstens 50 Stationen):
+  „1.8 s · 4 min ago“, „→ 142 B/s ← 138 B/s“ + „tested 3 min ago“.
+- Speed test fragt vorher (Dialog): Dauer aus dem letzten Ergebnis, sonst ≈ 120 B/s; gilt
+  auch für den Knopf in der schmalen Ansicht. Test: `test_ping_speed_chess_tick`.
 
 ## CR81 – Schiffe versenken zwischen zwei TBClients (offen, 08.11.2026)
 

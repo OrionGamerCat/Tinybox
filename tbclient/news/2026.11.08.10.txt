@@ -1,0 +1,4 @@
+- TBClient-Ansicht am PC: dritte Spalte rechts mit Ping,
+  Speed test, Chess, QSL, Heard there, Delete history;
+  letzter Wert daneben ("tested 3 min ago").
+- Speed test fragt vorher (Kanal ca. 20 s belegt).

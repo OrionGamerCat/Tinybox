@@ -231,6 +231,11 @@ class PeerHistoryTests(unittest.TestCase):
                 self.assertGreater(pb.fun.st["out"], 0)
                 self.assertGreater(pb.fun.st["in"], 0)
                 self.assertEqual(a.peerchat.count("OE3TEC"), 0)
+                # CR80: the last results stay per station, also for the next connect
+                last = pb.fun.summary()["last"]
+                self.assertEqual(last["ping"][0], pb.fun.pings[-1])
+                self.assertEqual(last["st"][:2], [pb.fun.st["out"], pb.fun.st["in"]])
+                self.assertIn("OE3GAS", b.settings["fun_last"])
                 # chess: b plays white, turns are checked
                 self.assertTrue(b.peer_fun(1, "chess-new", "w"))
                 await until(lambda: pa.fun.game is not None)

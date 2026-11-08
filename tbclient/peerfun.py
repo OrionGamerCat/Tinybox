@@ -61,6 +61,7 @@ class PeerFun:
         if self._ping and self._ping[0] == token:
             self.pings = (self.pings + [round(time.monotonic() - self._ping[1], 3)])[-5:]
             self._ping = None
+            self._remember("ping", [self.pings[-1], int(time.time())])
             self.core._touch()
 
     # --- speed test -----------------------------------------------------------------
@@ -101,6 +102,7 @@ class PeerFun:
     def _finish(self) -> None:
         if self.st and self.st["out"] is not None and self.st["in"] is not None:
             self.st["state"] = "done"
+            self._remember("st", [self.st["out"], self.st["in"], int(time.time())])
             self.ch.term_line("sys", f"*** speed test: to {self.ch.target} {self.st['out']} B/s, "
                                      f"from {self.ch.target} {self.st['in']} B/s")
 
@@ -207,7 +209,18 @@ class PeerFun:
             return False
         return True
 
+    # --- the last results per station (CR80: "tested 3 min ago", also after a new connect)
+
+    def _remember(self, what: str, value: list) -> None:
+        last = self.core.settings.setdefault("fun_last", {})
+        last.setdefault(self.peer.call, {})[what] = value
+        if len(last) > 50:                    # forget the stations not met for longest
+            for call in sorted(last, key=lambda c: max(v[-1] for v in last[c].values()))[:-50]:
+                del last[call]
+        self.core._save_settings()
+
     def summary(self) -> dict:
         g = self.game
         return {"pings": self.pings, "pinging": self._ping is not None, "st": self.st,
+                "last": self.core.settings.get("fun_last", {}).get(self.peer.call, {}),
                 "chess": None if g is None else {**g, "my_turn": self._my_turn()}}
