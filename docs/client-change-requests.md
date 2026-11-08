@@ -2150,6 +2150,8 @@ werden – außer es handelt sich um eine TinyBox.
   der Chip blinkt wie bisher.
 - Gilt für AGW, KISS und AXUDP.
 - Test: `tests/test_tbclient.py` (`test_incoming_connect_over_agw`, um CR75 erweitert).
+- **08.11.2026:** Die Ausnahme „bekannte TinyBox“ ist entfernt – eine TinyBox ruft nie selbst
+  einen Client an (Entscheidung OE3GAS, CR76). Jeder eingehende Connect springt in seine Ansicht.
 
 ## CR76 – Kennung `//TB?` nach dem Connect: TinyBox, TBClient oder fremde Station (✅ 07.11.2026)
 
@@ -2301,9 +2303,19 @@ freischalten.
   TinyBox-Web, Client-Chat, TBClient-Karte, `STAT` zeigt `~~~~~`. Ohne Frames grau. Siehe
   PLANUNG 14.
 
+### Stufe 5: Emoticons/Emoji (Client 2026.11.08.2)
+
+- Dieselbe Regel wie im TinyBox-Chat (PLANUNG 12.6, CR28): Emojis gehen nie als Unicode über
+  Funk, sondern als klassisches Emoticon (`:-)`) bzw. `~XY`, `~~` = Tilde. Getippte Emoticons
+  werden sofort zum Emoji, Knopf ☺ öffnet die Auswahl (ASCII-Smileys zuerst); darüber die
+  Anzeige „n bytes on air: …“ bzw. welche Emojis nicht sendbar sind.
+- Im Verlauf steht, was über Funk ging (beide Seiten gleich, Hash-Kette bleibt stimmig); die Blasen
+  zeigen es als Emoji. Die rohe Terminal-Ansicht zeigt die Funkform.
+- Ältere Clients (vor 2026.11.08.2) zeigen in ihrer Ansicht die Funkform `:-)`.
+
 ### Später (eigene Stufen)
 
-- Emoticons/Emoji und Reaktionen in der TBClient-Ansicht.
+- Reaktionen auf Blasen in der TBClient-Ansicht.
 - Bilder direkt (CR12-Verfahren, binär).
 - Direkte Nachricht/Datei mit LZHUF.
 - Uhrzeitabgleich.

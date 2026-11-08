@@ -188,7 +188,12 @@
       <pre id="term-out" class="term-out" aria-live="polite"></pre>
       <aside id="aprs-lens" class="ar-lens" aria-label="APRS Lense" hidden></aside>
     </div>
+    <div id="peer-picker" class="picker peer-picker hidden" aria-label="Emoji">
+      <div id="peer-picker-grid" class="picker-grid"></div>
+    </div>
+    <div id="peer-hint" class="hint hidden"></div>
     <form id="term-form" class="term-in" autocomplete="off">
+      <button id="peer-emoji" type="button" class="icon-btn hidden" aria-label="Emoji" title="Emoji">☺</button>
       <input id="term-input" type="text" maxlength="250" spellcheck="false" autocapitalize="off" enterkeyhint="send" placeholder="Command (Enter = send)">
       <button type="submit" class="send" aria-label="Send">➤</button>
     </form>

@@ -1,0 +1,3 @@
+- TBClient-Ansicht: Emoticons werden zu Emojis, Emoji-Knopf; ueber
+  Funk als :-) bzw. ~XY wie im TinyBox-Chat.
+- Eingehender Connect springt immer in seine Ansicht.

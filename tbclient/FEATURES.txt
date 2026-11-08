@@ -24,9 +24,9 @@ Zuletzt dazugekommen
 - max_channels in tbclient.conf: 1 bis 10 Verbindungen gleichzeitig
   (Standard 5), Alt+1 ... Alt+9.
 - Eingehender Connect (CR75): ruft uns eine Station an, schaltet die Web-GUI
-  gleich auf das Terminal dieses Kanals. Ausnahme: eine bekannte TinyBox
-  (die eigene oder eine schon einmal als TinyBox erkannte) - dann bleibt die
-  Ansicht, wie sie ist, nur der Chip blinkt.
+  gleich auf diesen Kanal (Terminal, bei einem TBClient dessen Ansicht).
+- Emoticons in der TBClient-Ansicht: :-) wird zum Emoji, Emoji-Knopf; ueber
+  Funk gehen sie als :-) bzw. ~XY wie im TinyBox-Chat.
 - Konsole im tbclient-Fenster: I / INFO zeigt den Startblock noch einmal
   (Rufzeichen, TinyBox, Verbindung, Funkwerte, Web-GUI), H = Hilfe. Was im
   Terminal der Web-GUI getippt wird, geht wie bisher an die TinyBox.

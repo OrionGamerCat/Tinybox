@@ -2306,6 +2306,8 @@ function renderPeer(c, mon) {
   $("peer-info").classList.toggle("hidden", !p || pv);
   $("peer-heard").classList.toggle("hidden", !p || !on || !p.caps.includes("HEARD"));
   $("peer-clear").classList.toggle("hidden", !p || !p.hist || !pv);
+  $("peer-emoji").classList.toggle("hidden", !pv);
+  if (!pv) { $("peer-picker").classList.add("hidden"); $("peer-hint").classList.add("hidden"); }
   $("peer-raw").classList.toggle("hidden", !p);
   $("peer-raw").textContent = pv ? "Terminal" : "TBClient view";
   $("peer-head").classList.toggle("hidden", !p || !pv);
@@ -2384,7 +2386,7 @@ function peerQuality(q, c) {
 let peerChatKey = "";
 function peerBubble(kind, text, t) {
   const b = el("div", "pb " + kind);
-  b.append(el("div", "pb-t", text || " "), el("div", "pb-time", hhmm(t)));
+  b.append(el("div", "pb-t", wireToText(text) || " "), el("div", "pb-time", hhmm(t)));   // :-) -> emoji
   return b;
 }
 
@@ -2555,11 +2557,54 @@ async function termSend(e) {
   const inp = $("term-input");
   const text = inp.value;
   if (!S || curCh().state !== "online" || !activeCh) return;
+  if (view === "peer") {                          // emojis go as :-) or ~XY (PLANUNG 12.6)
+    const { wire, bad } = textToWire(text);
+    if (bad.length || !wire) { peerHint(); return; }
+    inp.value = "";
+    peerHint();
+    $("peer-picker").classList.add("hidden");
+    await api("term", { text: wire, ch: activeCh });
+    return;
+  }
   if (text && termHist[termHist.length - 1] !== text) termHist.push(text);
   termHist.splice(0, Math.max(0, termHist.length - 50));
   termHistPos = termHist.length;
   inp.value = "";
   await api("term", { text, ch: activeCh });
+}
+
+/* TBClient view: what goes on the air, or which emojis cannot (as #hint in the chat) */
+function peerHint() {
+  const v = $("term-input").value, hint = $("peer-hint");
+  if (view !== "peer" || !v.trim()) { hint.classList.add("hidden"); return; }
+  const { wire, bad } = textToWire(v);
+  hint.classList.remove("hidden");
+  hint.className = bad.length ? "hint" : "hint info";
+  hint.textContent = bad.length ? `Not sendable over radio: ${bad.join(" ")} – use the emoji button.`
+    : `${new TextEncoder().encode(wire).length} bytes on air: ${wire}`;
+}
+
+function peerPicker() {
+  const box = $("peer-picker"), grid = $("peer-picker-grid");
+  if (!box.classList.contains("hidden")) { box.classList.add("hidden"); return; }
+  grid.replaceChildren();
+  for (const g of emojiGroups()) {
+    if (g.name) grid.append(el("div", "picker-h", g.name));
+    for (const e of g.items) {
+      const b = el("button", "", e);
+      b.type = "button";
+      b.onclick = () => {
+        const i = $("term-input");
+        const a = i.selectionStart ?? i.value.length, z = i.selectionEnd ?? i.value.length;
+        i.value = i.value.slice(0, a) + e + i.value.slice(z);
+        i.focus();
+        i.selectionStart = i.selectionEnd = a + e.length;
+        peerHint();
+      };
+      grid.append(b);
+    }
+  }
+  box.classList.remove("hidden");
 }
 
 function termKey(e) {
@@ -2747,6 +2792,12 @@ async function start() {
   $("peer-heard").onclick = peerHeard;                         // CR78
   $("peer-raw").onclick = peerToggle;
   $("peer-clear").onclick = peerClear;
+  $("peer-emoji").onclick = peerPicker;
+  $("term-input").addEventListener("input", (e) => {          // TBClient view: :-) -> emoji
+    if (view !== "peer") return;
+    if (e.inputType !== "deleteContentBackward") liveEmoticon(e.target);
+    peerHint();
+  });
   const monRedraw = () => { monDirty = true; if (S && activeCh === 0) { renderMonitor(); $("term-out").scrollTop = $("term-out").scrollHeight; } };
   $("mon-ui").onclick = uiToggle;                              // CR66
   $("ui-form").addEventListener("submit", uiSend);

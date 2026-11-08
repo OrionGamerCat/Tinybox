@@ -133,8 +133,7 @@ class Channel:
                 self.ended = None
                 self._terminal()
                 self.act_n += 1                     # the chip blinks
-                if not self.core.known_tinybox(self.target):
-                    self.core.focus_channel(self.n)  # CR75: the GUI shows its terminal
+                self.core.focus_channel(self.n)      # CR75: the GUI shows it at once
             else:
                 self._probe()                       # CR76: who is there?
                 self._detect_task = asyncio.ensure_future(self._detect())

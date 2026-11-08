@@ -300,8 +300,8 @@ class ClientCore:
         return ch.link
 
     def focus_channel(self, n: int) -> None:
-        """CR75: the GUI shows channel n (its terminal) at once - for an incoming
-        connect of a station that is no TinyBox."""
+        """CR75: the GUI shows channel n at once - an incoming connect (a TinyBox
+        never calls a client, 07.11.2026)."""
         self.focus = {"n": n, "seq": self.focus["seq"] + 1}
         self._touch()
 
