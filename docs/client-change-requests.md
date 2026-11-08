@@ -2637,8 +2637,8 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   (I, RR, REJ, UA, DISC …) sieht kein AGW-Client.
 - **Fork** (oe3gas/direwolf-tinybox, Zweig `tinybox`): in `xmit.c` jeden gesendeten Frame
   zusätzlich **roh** an die AGW-Clients geben, die `k` eingeschaltet haben – als eigener neuer
-  Frame-Typ (Vorschlag **`k`-Antwort `X`**? besser ein freier Buchstabe, z. B. **`O`** = „own“),
-  Aufbau wie `K`: ein Byte Port, danach der Frame ohne FCS. Ein eigener Typ, damit Clients, die
+  Frame-Typ **`O`** („own“, im AGW-Protokoll frei), Aufbau wie `K`: ein Byte Port, danach der
+  Frame ohne FCS. Ein eigener Typ, damit Clients, die
   nur das Original kennen, nichts falsch als empfangen deuten. Kein Protokollverhalten ändert sich
   (Grundsatz des Forks). Dokumentation in `TINYBOX.md`.
 - Gemeldet wird beim **tatsächlichen Senden** (nach Kanalzugang/TXDELAY), damit die Zeit stimmt
