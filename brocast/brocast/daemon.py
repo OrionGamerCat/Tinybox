@@ -64,6 +64,7 @@ class Daemon:
                                lan=cfg.listener.allow_lan, lan_names=cfg.listener.lan_names)
         self.listener.install_dictionary = self.install_received
         self.web.dict_broadcast = self.broadcast_dictionary_now
+        self.web.tx_status = self.tx_status                 # view "Sendung" (station)
         self.carousel: Carousel | None = None
         self.station: Station | None = None
         self.ingest: IngestServer | None = None
@@ -285,6 +286,14 @@ class Daemon:
         self.release = new
 
     # -- status -------------------------------------------------------------
+
+    def tx_status(self) -> dict[str, Any]:
+        """What the station sends right now (web GUI, view "Sendung")."""
+        if not self.carousel:
+            return {"station": False}
+        return {"station": True, "connected": self.link.connected.is_set(),
+                "interface": self.cfg.direwolf.describe(),
+                "pages": len(self.store.list_pages()), **self.carousel.tx_state()}
 
     def status(self) -> dict[str, Any]:
         now = self.clock()

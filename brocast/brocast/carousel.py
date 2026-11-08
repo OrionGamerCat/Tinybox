@@ -14,6 +14,9 @@
   * withdrawn pages are sent withdraw_repeats times, then removed
   * an airtime budget (percent of a sliding window) keeps the channel free
     for the BBS; emergency pages (pri 3) may exceed it
+  * what is on the air right now, what waits and what went out last is kept
+    for the web GUI (tx_state(), view "Sendung", 08.11.2026) - updated with
+    every frame handed to Direwolf, like the Sendeprotokoll
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ log = logging.getLogger(__name__)
 EMERGENCY = 3
 MAX_SLEEP = 30.0
 RESTING = 2 ** 31 - 1   # next_tx einer ruhenden Seite (aging-Intervall 0)
+RECENT = 12             # pages kept in "zuletzt gesendet"
 QUEUE_POLL_S = 0.5      # AGW: how often to ask Direwolf for its transmit queue
 TX_MARGIN_S = 0.5       # AGW: TXTAIL + audio buffer after the queue became empty
 QUEUE_STALE_S = 120.0   # AGW: queue empty and last block older -> long over, no pause
@@ -96,6 +100,13 @@ class Carousel:
         # own schedules for single pages: (provider, key) -> gap_min(sends_done)
         self.schedules: dict[tuple[str, str], Callable[[int], int]] = {}
         self.txlog: TxLog | None = txlog
+        # for the web GUI: the page on the air, the last ones, why it waits
+        self.current: dict | None = None
+        self.recent: deque[dict] = deque(maxlen=RECENT)
+        self.blocked: dict | None = None      # {"reason": "budget"|"link", "until", "page"}
+        self.last_queue: int | None = None    # AGW: frames Direwolf still holds (last look)
+        self.day = ""
+        self.day_pages = self.day_frames = 0
 
     def wake(self) -> None:
         self._wake.set()
@@ -161,6 +172,7 @@ class Carousel:
         first, since = True, self.mono()
         while True:
             n = await self.queue_len()
+            self.last_queue = n
             if n is None:
                 return None
             if n == 0:
@@ -196,15 +208,32 @@ class Carousel:
             if row.pri < EMERGENCY and not self.budget.allows(now, needed):
                 wait = self.budget.free_at(now, needed) - now
                 log.debug("Airtime-Budget erschöpft, warte %.0f s", wait)
+                self.blocked = {"reason": "budget", "until": now + wait, "page": row.id,
+                                "waiting": len(self.store.due_pages(int(now)))}
                 return min(max(wait, 1.0), MAX_SLEEP)
             typ, title = title_of(row.content)
             dest = "BROCST" + ("," + ",".join(self.cfg.path) if self.cfg.path else "")
+            airs = [airtime_s(len(f), self.cfg.baud, 0) for f in frames]
+            self.current = {"id": row.id, "rev": row.rev, "typ": typ, "title": title,
+                            "provider": row.provider, "pkey": row.pkey, "pri": row.pri,
+                            "withdrawn": row.state == "withdrawn", "dest": dest,
+                            "total": len(frames), "sent": 0, "bytes": sum(len(f) for f in frames),
+                            "air": round(needed, 1), "air_done": 0.0, "started": self.clock(),
+                            "handed": None, "bursts": self._bursts(len(frames))}
             for n, f in enumerate(frames, start=1):
                 await self._pace(len(f))
                 if not await self.send(f):
                     self._burst_count = 0
                     log.debug("Direwolf nicht verbunden, Senden verschoben")
+                    self._done("paused")
+                    self.blocked = {"reason": "link", "until": self.clock() + 5, "page": row.id}
                     return 5.0
+                self.blocked = None
+                cur = self.current
+                if cur is not None:
+                    cur["sent"], cur["handed"] = n, self.clock()
+                    cur["air_done"] = round(cur["air_done"] + airs[n - 1], 1)
+                self._count_frame()
                 if self.txlog:
                     self.txlog.record(self.clock(), dest, row.id, row.rev, n, len(frames), typ,
                                       len(f), airtime_s(len(f), self.cfg.baud, 0),
@@ -212,9 +241,10 @@ class Carousel:
                                       withdrawn=row.state == "withdrawn")
             self.budget.add(now, needed)
             self.sent_pages += 1
+            self.day_pages += 1
+            self._done("withdrawn" if row.state == "withdrawn" else "ok")
             self._after_send(row, int(now))
-            limit = self.cfg.burst_frames
-            bursts = -(-len(frames) // limit) if limit > 0 else 1
+            bursts = self._bursts(len(frames))
             log.info("gesendet: Seite %s rev %s (%s Frames in %s Aussendung%s, %.1f s)%s",
                      row.id, row.rev, len(frames), bursts, "en" if bursts > 1 else "", needed,
                      " [zurückgezogen]" if row.state == "withdrawn" else "")
@@ -223,6 +253,60 @@ class Carousel:
         if nxt is None:
             return MAX_SLEEP
         return min(max(nxt - self.clock(), 0.5), MAX_SLEEP)
+
+    def _bursts(self, frames: int) -> int:
+        limit = self.cfg.burst_frames
+        return -(-frames // limit) if limit > 0 else 1
+
+    def _count_frame(self) -> None:
+        day = time.strftime("%Y-%m-%d", time.localtime(self.clock()))
+        if day != self.day:
+            self.day, self.day_pages, self.day_frames = day, 0, 0
+        self.day_frames += 1
+
+    def _done(self, result: str) -> None:
+        """The page in self.current is through (ok / withdrawn) or broken off (paused)."""
+        cur = self.current
+        if cur is None:
+            return
+        self.recent.appendleft({"t": cur["handed"] or cur["started"], "id": cur["id"],
+                                "title": cur["title"], "typ": cur["typ"], "pri": cur["pri"],
+                                "sent": cur["sent"], "total": cur["total"], "air": cur["air"],
+                                "result": result})
+        self.current = None
+
+    def tx_state(self) -> dict:
+        """For the web GUI (view "Sendung"): on the air, waiting, last sent, budget."""
+        now = self.clock()
+        cur = dict(self.current) if self.current else None
+        if cur is not None:
+            # still on the air: what is not handed over yet, plus (AGW) what Direwolf holds
+            left = max(cur["air"] - cur["air_done"], 0.0)
+            if self.queue_len is not None and self.last_queue:
+                left += self.last_queue * (cur["air_done"] / max(cur["sent"], 1))
+            cur["left_s"] = round(left, 1)
+        blocked = self.blocked
+        if blocked and blocked.get("until", 0) < now - 30:
+            blocked = None                                  # long gone
+        nxt = []
+        for row in self.store.upcoming(8):
+            typ, title = title_of(row.content)
+            n = self.store.frame_count(row.pid)
+            nxt.append({"id": row.id, "title": title, "typ": typ, "pri": row.pri,
+                        "parts": n, "next_tx": None if row.next_tx >= RESTING else row.next_tx,
+                        "resting": row.next_tx >= RESTING, "withdrawn": row.state == "withdrawn",
+                        "new": row.tx_count == 0})
+        b = self.budget
+        if self.day != time.strftime("%Y-%m-%d", time.localtime(now)):
+            self.day, self.day_pages, self.day_frames = "", 0, 0
+        return {"now": now, "current": cur, "blocked": blocked, "next": nxt,
+                "recent": list(self.recent), "queue": self.last_queue,
+                "agw": self.queue_len is not None,
+                "budget": {"used_s": round(b.spent(now), 1), "limit_s": round(b.limit, 1),
+                           "percent": self.cfg.airtime_percent,
+                           "window_min": self.cfg.airtime_window_min},
+                "gap_s": self.cfg.burst_gap_s, "burst_frames": self.cfg.burst_frames,
+                "today": {"pages": self.day_pages, "frames": self.day_frames}}
 
     def _after_send(self, row: PageRow, now: int) -> None:
         sends_done = row.tx_count + 1

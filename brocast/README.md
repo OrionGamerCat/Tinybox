@@ -261,11 +261,21 @@ Fehlerstreuung, gut für Zeichnungen und Logos), `--text` (Bildunterschrift),
 `--rubrik`, `--gueltig`. Dafür wird Pillow gebraucht (`pip install pillow`);
 im Listener-Betrieb lehnt der Befehl ab.
 
+**Sendung (Station, 08.11.2026):** In der Kopfzeile zeigt ein Feld, was die Station gerade
+sendet – „ON AIR P120 Wetter Krems 3/7“ mit Fortschrittsbalken, sonst die nächste Seite mit
+Countdown, „⏸ PAUSE“ bei vollem Airtime-Budget oder „✕ KEIN SENDER“, wenn Direwolf getrennt
+ist; daneben das Airtime-Budget. Ein Klick (oder „Sendung“ in der Seitenleiste) öffnet die
+Ansicht mit der Seite auf Sendung (Teile als Kästchen, Bytes, Airtime, Restzeit, bei AGW die
+Frames in der Direwolf-Queue), dem Budget, den nächsten Seiten und den zuletzt gesendeten.
+Zeit = Übergabe an Direwolf wie im Sendeprotokoll; bei KISS ist die Restzeit berechnet. Die
+Oberfläche fragt jede Sekunde, solange gesendet wird, sonst alle 5 s.
+
 Die Rohdaten liefert weiterhin die JSON-API:
 
 | Adresse | Inhalt |
 | --- | --- |
 | `http://127.0.0.1:7733/api/v1/status` | Status |
+| `http://127.0.0.1:7733/api/v1/tx` | Station: was gerade gesendet wird (Seite, Teil n/gesamt), was als Nächstes kommt, zuletzt gesendet, Airtime-Budget – aktualisiert bei jeder Übergabe eines Frames an Direwolf |
 | `http://127.0.0.1:7733/api/v1/categories` | Rubriken mit Anzahl/ungelesen (auch leere, die eine Station ankündigt) |
 | `http://127.0.0.1:7733/api/v1/rubrics` | alle Rubriken für die Abo-Matrix, mit Beschreibung und `stations` |
 | `http://127.0.0.1:7733/api/v1/stations` | gehörte Stationen |

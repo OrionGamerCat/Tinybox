@@ -13,8 +13,10 @@
   <div class="logo">brocast</div>
   <span class="badge-call" id="hdr-call">…</span>
   <span class="stat"><span class="dot" id="hdr-dot"></span><span id="hdr-kiss">Direwolf …</span></span>
+  <button class="txpill" id="hdr-tx" type="button" hidden aria-label="Sendung anzeigen"></button>
+  <span class="stat m-hide airmini" id="hdr-air" hidden></span>
   <span class="stat m-hide"><b id="hdr-unread">0</b>&nbsp;ungelesen</span>
-  <span class="stat m-hide"><b id="hdr-stations">0</b>&nbsp;Stationen gehört</span>
+  <span class="stat m-hide stat-st"><b id="hdr-stations">0</b>&nbsp;Stationen gehört</span>
   <span class="grow"></span>
   <div class="hsearch">
     <input class="search" id="search" type="search" placeholder="Suchen in allen Seiten …" autocomplete="off">
@@ -48,6 +50,7 @@
     <div class="side-foot">
       <button class="nav" id="nav-fav" type="button"><span class="name">★ Gemerkt</span><span class="count" id="fav-count"></span></button>
       <button class="nav" id="nav-rxlog" type="button"><span class="name">Empfangslog</span><span class="count"></span></button>
+      <button class="nav" id="nav-tx" type="button" hidden><span class="name"><span class="txdot" id="nav-tx-dot"></span>Sendung</span><span class="count" id="nav-tx-count"></span></button>
       <button class="nav" id="nav-status" type="button"><span class="name">Status</span><span class="count"></span></button>
     </div>
   </nav>

@@ -244,6 +244,7 @@ function updateBack() {
   $("nav-fav").classList.toggle("mon", pane === "list" && state.filter === "fav" && !state.cat && !state.station);
   $("nav-rxlog").classList.toggle("mon", pane === "view" && state.screen === "rxlog");
   $("nav-status").classList.toggle("mon", pane === "view" && state.screen === "status");
+  $("nav-tx").classList.toggle("mon", pane === "view" && state.screen === "tx");
 }
 
 /* ---------- left pane ---------- */
@@ -2337,6 +2338,194 @@ async function poll() {
   else if (document.activeElement && document.activeElement.tagName !== "SELECT") refreshLists();
 }
 
+/* ---------- Sendung: what the station sends right now (08.11.2026) ----------
+ * /tx is updated by brocastd with every frame handed to Direwolf (AGW/KISS).
+ * Polled every second while something is on the air or the view is open,
+ * else every 5 s. Only for a station. */
+
+const TX_FAST_MS = 1000, TX_SLOW_MS = 5000;
+let txTimer = null;
+
+function mmss(s) {
+  s = Math.max(0, Math.round(s));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+function hms(ts) {
+  return new Date(ts * 1000).toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+function secs(v) { return num(Math.round(v * 10) / 10).replace(".", ","); }
+function mins(s) { return (Math.round(s / 6) / 10).toLocaleString("de-AT", { minimumFractionDigits: 1 }); }
+
+async function refreshTx() {
+  clearTimeout(txTimer);
+  let tx = null;
+  if (state.status.mode === "station") {
+    try { tx = await api("GET", "/tx"); } catch (e) { tx = null; }
+  }
+  state.tx = tx && tx.station ? tx : null;
+  renderTxHeader();
+  if (state.screen === "tx" && document.body.dataset.pane === "view") renderTxView();
+  const fast = state.tx && (state.tx.current || state.screen === "tx");
+  txTimer = setTimeout(() => refreshTx().catch(() => {}), fast ? TX_FAST_MS : TX_SLOW_MS);
+}
+
+function renderTxHeader() {
+  const tx = state.tx, pill = $("hdr-tx"), air = $("hdr-air");
+  $("nav-tx").hidden = !tx;
+  pill.hidden = air.hidden = !tx;
+  document.body.classList.toggle("tx-on", !!tx);      // the top bar makes room (CSS)
+  if (!tx) return;
+  $("nav-tx-count").textContent = tx.pages;
+  $("nav-tx-dot").className = "txdot" + (tx.current ? " on" : "");
+  const cur = tx.current, bl = tx.blocked;
+  pill.className = "txpill";
+  if (!tx.connected) {
+    pill.classList.add("down");
+    pill.replaceChildren(el("b", null, "✕ KEIN SENDER"),
+      el("span", "t", bl && bl.page ? `P${bl.page} wartet – neuer Versuch in ${mmss(bl.until - tx.now)}` : "Direwolf getrennt"));
+  } else if (cur) {
+    pill.classList.add("onair");
+    const bar = el("span", "bar");
+    bar.style.width = Math.round((100 * cur.sent) / Math.max(cur.total, 1)) + "%";
+    pill.replaceChildren(el("span", "rec", "ON AIR"), el("span", "y", `P${cur.id}`),
+      el("span", "t", cur.title || cur.typ), el("span", "c", `${cur.sent}/${cur.total}`), bar);
+  } else if (bl && bl.reason === "budget") {
+    pill.classList.add("pause");
+    pill.replaceChildren(el("b", null, "⏸ PAUSE"),
+      el("span", "t", `Airtime-Budget voll – ${bl.waiting} Seite${bl.waiting === 1 ? "" : "n"} warten, frei in ${mmss(bl.until - tx.now)}`));
+  } else {
+    const n = tx.next.find((p) => p.next_tx);
+    pill.classList.add("idle");
+    pill.replaceChildren(el("span", "ring"), el("span", "m", "nächste"),
+      ...(n ? [el("span", "y", `P${n.id}`), el("span", "t", n.title || n.typ),
+               el("b", null, n.next_tx <= tx.now ? "gleich" : `in ${mmss(n.next_tx - tx.now)}`)]
+            : [el("span", "t", "nichts geplant")]));
+  }
+  const b = tx.budget, pct = b.limit_s ? Math.min(100, (100 * b.used_s) / b.limit_s) : 0;
+  const gauge = el("span", "gauge"), fill = el("span", "fill");
+  fill.style.width = pct + "%";
+  gauge.append(fill);
+  air.className = "stat m-hide airmini" + (pct >= 100 ? " full" : "");
+  air.replaceChildren("Airtime ", gauge, el("b", "mono", `${mins(b.used_s)}/${mins(b.limit_s)} min`));
+}
+
+async function renderTx() {
+  state.screen = "tx";
+  state.selected = null;
+  await refreshStatus();
+  await refreshTx();
+  renderTxView();
+}
+
+function partChips(cur) {
+  const row = el("div", "txparts");
+  row.append(el("span", "lbl", "Teil"));
+  for (let i = 1; i <= cur.total && i <= 40; i++) {
+    row.append(el("span", "pc" + (i < cur.sent ? " done" : i === cur.sent ? " now" : ""), i));
+  }
+  if (cur.bursts > 1) row.append(el("span", "lbl2", `${cur.bursts} Aussendungen`));
+  return row;
+}
+
+function renderTxView() {
+  const tx = state.tx, v = $("view");
+  if (!tx) { v.replaceChildren(el("p", "empty", "Nur eine Station sendet.")); return; }
+  const w = el("div", "txwrap");
+  const h = el("div", "txhead");
+  h.append(el("h2", null, "Sendung"), el("span", "sub",
+    `Station ${state.status.callsign || ""} · ${tx.pages} Seiten im Karussell · Zeit = Übergabe an Direwolf (wie im Sendeprotokoll)`));
+  w.append(h);
+
+  const top = el("div", "txgrid");
+  // now on the air
+  const now = el("section", "txnow");
+  const cur = tx.current;
+  const nh = el("div", "nh");
+  nh.append(el("span", cur ? "rec" : "rec off", cur ? "JETZT AUF SENDUNG" : (tx.connected ? "KEINE AUSSENDUNG" : "DIREWOLF GETRENNT")),
+    el("span", "grow"), el("span", "c", hms(tx.now)));
+  now.append(nh);
+  const nb = el("div", "nb");
+  if (cur) {
+    const t = el("div", "nt");
+    t.append(el("span", "y", `P${cur.id}`), el("span", "ti", cur.title || cur.typ));
+    const parts = [`Rev ${cur.rev}`, cur.typ, `${cur.provider}/${cur.pkey}`, `Ziel ${cur.dest}`];
+    if (cur.withdrawn) parts.push("zurückgezogen");
+    const bar = el("div", "pbar"), fill = el("div");
+    fill.style.width = Math.round((100 * cur.sent) / Math.max(cur.total, 1)) + "%";
+    bar.append(fill);
+    const kv = el("div", "kv");
+    const cell = (k, val, cls) => { const c = el("div"); c.append(el("div", "k", k), el("div", "v" + (cls ? " " + cls : ""), val)); return c; };
+    kv.append(cell("Bytes", cur.bytes.toLocaleString("de-AT")), cell("Airtime", `≈ ${secs(cur.air)} s`),
+      cell(tx.agw ? "noch" : "noch (berechnet)", `≈ ${secs(cur.left_s)} s`, "y"),
+      cell("bei Direwolf", tx.agw ? (tx.queue === null ? "?" : `${tx.queue} Frames`) : "KISS: keine Rückmeldung"));
+    nb.append(t, el("div", "nm", parts.join(" · ")), partChips(cur), bar, kv);
+  } else {
+    const bl = tx.blocked;
+    const n = tx.next.find((p) => p.next_tx);
+    nb.append(el("div", "nidle", bl && bl.reason === "budget"
+      ? `Airtime-Budget aufgebraucht – frei in ${mmss(bl.until - tx.now)}. Notfall-Seiten gehen trotzdem.`
+      : !tx.connected ? "Direwolf ist nicht verbunden – die Sendung wartet."
+        : n ? `Als Nächstes: P${n.id} ${n.title || n.typ} ${n.next_tx <= tx.now ? "gleich" : "in " + mmss(n.next_tx - tx.now)}`
+          : "Im Karussell ist nichts geplant."));
+  }
+  now.append(nb);
+  // budget
+  const bud = el("section", "txcard");
+  const b = tx.budget, pct = b.limit_s ? Math.min(100, (100 * b.used_s) / b.limit_s) : 0;
+  const big = el("div", "big");
+  big.append(el("span", "n", mins(b.used_s)), el("span", "s", `von ${mins(b.limit_s)} min in den letzten ${b.window_min} min (${num(b.percent)} %)`));
+  const g = el("div", "gauge big" + (pct >= 100 ? " full" : "")), gf = el("span", "fill");
+  gf.style.width = pct + "%"; g.append(gf);
+  const facts = el("div", "facts");
+  const fact = (k, val) => facts.append(el("span", "k", k), el("b", null, val));
+  fact("Schnittstelle", tx.agw ? `${tx.interface} · Queue wird abgefragt` : `${tx.interface} · Ende berechnet`);
+  fact("Heute gesendet", `${tx.today.pages} Seiten · ${tx.today.frames} Frames`);
+  fact("Pause zwischen Aussendungen", `${num(tx.gap_s)} s`);
+  bud.append(el("h3", null, "Airtime-Budget"), big, g,
+    el("div", "bnote", "Wird es eng, warten normale Seiten; Notfall-Seiten (Priorität 3) gehen trotzdem."), facts);
+  top.append(now, bud);
+  w.append(top);
+
+  const low = el("div", "txgrid even");
+  // next up
+  const nx = el("section", "txcard flush");
+  nx.append(el("h3", "bar", "Als Nächstes"));
+  const nl = el("div", "txlist next");
+  if (!tx.next.length) nl.append(el("div", "none", "keine Seiten im Karussell"));
+  for (const p of tx.next) {
+    const row = el("div", "r" + (p.resting ? " rest" : ""));
+    const ti = el("span", "ti", (p.title || p.typ) + (p.resting ? " – ruht" : ""));
+    if (p.new && !p.resting) ti.append(" ", el("span", "tag upd", "neu"));
+    if (p.withdrawn) ti.append(" ", el("span", "tag old", "zurückgezogen"));
+    if (p.pri >= 3) ti.append(" ", el("span", "tag alarm", "Notfall"));
+    row.append(el("span", "pg", `P${p.id}`), ti, el("span", "meta", `${p.parts} Tl`),
+      el("span", "when", p.resting ? "–" : p.next_tx <= tx.now ? "gleich" : mmss(p.next_tx - tx.now)));
+    nl.append(row);
+  }
+  nx.append(nl);
+  // last sent
+  const ls = el("section", "txcard flush");
+  ls.append(el("h3", "bar", "Zuletzt gesendet"));
+  const ll = el("div", "txlist last");
+  if (!tx.recent.length) ll.append(el("div", "none", "seit dem Start noch nichts gesendet"));
+  for (const p of tx.recent) {
+    const row = el("div", "r");
+    const ti = el("span", "ti", p.title || p.typ);
+    if (p.pri >= 3) ti.append(" ", el("span", "tag alarm", "Notfall"));
+    const res = p.result === "ok" ? ["ok", `${p.sent}/${p.total} ✓`] : p.result === "withdrawn"
+      ? ["old", `${p.sent}/${p.total} ✕`] : ["part", `${p.sent}/${p.total} ⏸`];
+    const r = el("span", "res " + res[0], res[1]);
+    r.title = p.result === "ok" ? "vollständig an Direwolf übergeben" : p.result === "withdrawn"
+      ? "Rückzug gesendet" : "abgebrochen (Direwolf getrennt), kommt wieder";
+    row.append(el("span", "tm", hms(p.t)), el("span", "pg", `P${p.id}`), ti, r);
+    ll.append(row);
+  }
+  ls.append(ll);
+  low.append(nx, ls);
+  w.append(low);
+  v.replaceChildren(w);
+}
+
 async function init() {
   state.view = loadView();
   state.graphic = loadGraphic();
@@ -2350,6 +2539,8 @@ async function init() {
   };
   $("btn-settings").onclick = show(renderSettings);
   $("nav-status").onclick = show(renderStatus);
+  $("nav-tx").onclick = show(renderTx);
+  $("hdr-tx").onclick = show(renderTx);
   $("nav-rxlog").onclick = show(() => renderRxlog(null));
   $("dictbar-details").onclick = show(renderStatus);
   $("dictbar-import").onclick = show(renderImport);
@@ -2383,6 +2574,7 @@ async function init() {
   await refreshAlerts().catch(() => {});
   await refreshLists();
   renderEmpty();
+  refreshTx().catch(() => {});                  // keeps itself going (1 s / 5 s)
   setInterval(() => { poll().catch(() => {}); }, POLL_MS);
 }
 

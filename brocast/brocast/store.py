@@ -308,6 +308,15 @@ class Store:
             (now,)).fetchall()
         return [PageRow(**dict(r)) for r in rows]
 
+    def upcoming(self, limit: int = 8) -> list[PageRow]:
+        """The carousel's next pages (resting ones last), for the web GUI."""
+        rows = self.db.execute("SELECT * FROM pages ORDER BY next_tx, pri DESC, id LIMIT ?",
+                               (limit,)).fetchall()
+        return [PageRow(**dict(r)) for r in rows]
+
+    def frame_count(self, pid: int) -> int:
+        return self.db.execute("SELECT COUNT(*) AS n FROM frames WHERE pid=?", (pid,)).fetchone()["n"]
+
     def next_due(self) -> int | None:
         row = self.db.execute("SELECT MIN(next_tx) AS m FROM pages").fetchone()
         return row["m"]

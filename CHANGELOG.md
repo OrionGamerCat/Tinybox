@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+- brocast-Web-GUI (Station): **Sendestatus** – Feld in der Kopfzeile („ON AIR P120 … 3/7“ mit
+  Fortschritt, sonst nächste Seite mit Countdown, Pause bei vollem Budget, kein Sender) und neue
+  Ansicht **„Sendung“**: Seite auf Sendung mit Teilen, Bytes, Airtime, Restzeit, Direwolf-Queue,
+  Airtime-Budget, als Nächstes, zuletzt gesendet. Zeitnah: brocastd aktualisiert den Zustand bei
+  jeder Übergabe eines Frames an AGW/KISS, `GET /api/v1/tx`, Abfrage 1 s beim Senden, sonst 5 s.
 - Sysop-Konsole: **`FWD` ohne Rufzeichen startet den Forward mit allen Partnern** (nacheinander,
   ein Funkkanal); `FWD call` nur mit diesem Partner. Der Partnerstatus steht jetzt bei `FWQ`
   über der Warteschlange.

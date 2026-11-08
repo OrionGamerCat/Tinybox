@@ -55,6 +55,7 @@ class ListenerApi(JsonServer):
         self.status = status
         self.dict_import = dict_import
         self.dict_broadcast: Callable[[], dict[str, Any]] | None = None   # station only
+        self.tx_status: Callable[[], dict[str, Any]] | None = None        # station only
 
     def route(self, req: Request) -> tuple[int, Any]:
         parts, method, body, li = req.parts, req.method, req.body, self.listener
@@ -64,6 +65,8 @@ class ListenerApi(JsonServer):
                 if "pages" in daemon:                      # station: pages in the carousel
                     daemon["pages_station"] = daemon.pop("pages")
                 return 200, {**daemon, **li.status()}
+            if parts == ["tx"] and method == "GET":         # view "Sendung" (08.11.2026)
+                return 200, self.tx_status() if self.tx_status else {"station": False}
             if parts == ["categories"] and method == "GET":
                 return 200, li.categories(station=req.q("station"))
             if parts == ["dictionary", "import"] and method == "POST" and self.dict_import:
@@ -121,7 +124,7 @@ class ListenerApi(JsonServer):
                         return 200, li.set_read(org, page_id, body.get("read"))
                     if parts[3] == "favorite":
                         return 200, li.set_favorite(org, page_id, body.get("favorite"))
-            if parts and parts[0] in ("pages", "settings", "subscriptions", "status",
+            if parts and parts[0] in ("pages", "settings", "subscriptions", "status", "tx",
                                       "categories", "stations", "rubrics", "rxlog",
                                       "dictionary"):
                 raise HttpError(405, f"Methode {method} hier nicht erlaubt")
