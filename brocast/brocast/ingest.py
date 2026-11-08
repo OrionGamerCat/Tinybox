@@ -58,6 +58,7 @@ class IngestServer(JsonServer):
                 if method == "PUT":
                     return 200, st.put(provider, key, body)
                 if method == "DELETE":
+                    st.store.unblock(provider, key)    # gone at the source: no need to hold it off
                     return 200, st.delete(provider, key)
                 if method == "GET":
                     return 200, st.get(provider, key)

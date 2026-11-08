@@ -335,6 +335,8 @@ class Carousel:
                         "provider": row.provider, "key": row.pkey,
                         "parts": n, "next_tx": None if row.next_tx >= RESTING else row.next_tx,
                         "resting": row.next_tx >= RESTING, "withdrawn": row.state == "withdrawn",
+                        "withdraw_left": row.withdraw_left,
+                        "withdraw_of": self.cfg.withdraw_repeats,
                         "new": row.tx_count == 0})
         b = self.budget
         if self.day != time.strftime("%Y-%m-%d", time.localtime(now)):

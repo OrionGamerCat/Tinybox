@@ -282,7 +282,11 @@ Airtime, wird aber vom Budget nicht zurückgehalten; sie steht im Sendeprotokoll
 **Seite nicht mehr senden:** „✕“ bei „Als Nächstes“ (oder „Nicht mehr senden“ bei einer eigenen
 Seite) nimmt sie aus der Sendung: Die Hörer bekommen die Rücknahme und löschen sie, und schickt
 die Quelle (TinyBox-Abgleich, dxfeed) denselben Inhalt wieder, bleibt sie draußen. Erst ein
-geänderter Inhalt kommt wieder – oder „Wieder senden“. Ein Bulletin ist endgültig weg, wenn es
+geänderter Inhalt kommt wieder – oder „Wieder senden“. Solange die Rücknahme noch hinausgeht
+(`withdraw_repeats`), steht die Seite unter „Nicht gesendet“ mit „noch n Rücknahmen“ und in „Als
+Nächstes“ durchgestrichen mit „Rücknahme 2/3“; danach verschwindet sie aus beiden Listen. Die
+Sperre bleibt still, solange die Quelle denselben Inhalt noch liefert, und fällt weg, sobald sie
+ihn nicht mehr liefert (in der TinyBox gelöscht). Ein Bulletin ist endgültig weg, wenn es
 auch in der TinyBox gelöscht ist. Das einfache „Löschen“ einer fremden Seite blendet sie nur
 in der eigenen Liste aus.
 

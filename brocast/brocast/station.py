@@ -270,6 +270,9 @@ class Station:
                 results[key] = self.put(provider, key, content)
             except BrocastError as exc:
                 errors[key] = str(exc)
+        for b in self.store.list_blocked():           # no longer delivered: nothing to hold off
+            if b["provider"] == provider and b["pkey"] not in pages:
+                self.store.unblock(provider, b["pkey"])
         withdrawn = []
         for row in self.store.list_pages(provider):
             if row.pkey not in pages and row.state == "active":

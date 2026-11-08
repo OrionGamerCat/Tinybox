@@ -315,7 +315,19 @@ class Daemon:
         return {"station": True, "connected": self.link.connected.is_set(),
                 "interface": self.cfg.direwolf.describe(),
                 "pages": len(self.store.list_pages()), **self.carousel.tx_state(),
-                "off_air": self.store.list_blocked()}
+                "off_air": self._off_air()}
+
+    def _off_air(self) -> list[dict[str, Any]]:
+        """Pages the sysop took off the air, while their withdrawal still goes out
+        (with how many are left). After that they leave the list; the block stays
+        quietly as long as the source still delivers the same content."""
+        out = []
+        for b in self.store.list_blocked():
+            row = self.store.get_page(b["provider"], b["pkey"])
+            if row is not None and row.state == "withdrawn" and row.withdraw_left > 0:
+                out.append({**b, "withdraw_left": row.withdraw_left,
+                            "withdraw_of": self.cfg.station.withdraw_repeats})
+        return out
 
     def tx_action(self, action: str, body: Any) -> dict[str, Any]:
         """View "Sendung": take a page off the air / send it again."""

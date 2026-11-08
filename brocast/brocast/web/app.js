@@ -2513,10 +2513,15 @@ function renderTxView() {
   const nl = el("div", "txlist next");
   if (!tx.next.length) nl.append(el("div", "none", "keine Seiten im Karussell"));
   for (const p of tx.next) {
-    const row = el("div", "r" + (p.resting ? " rest" : ""));
-    const ti = el("span", "ti", (p.title || p.typ) + (p.resting ? " – ruht" : ""));
-    if (p.new && !p.resting) ti.append(" ", el("span", "tag upd", "neu"));
-    if (p.withdrawn) ti.append(" ", el("span", "tag old", "zurückgezogen"));
+    const row = el("div", "r" + (p.resting ? " rest" : "") + (p.withdrawn ? " wd" : ""));
+    const ti = el("span", "ti");
+    if (p.withdrawn) {                       // only the short withdrawal goes out, not the page
+      const n = Math.max(1, (p.withdraw_of || 1) - (p.withdraw_left || 0) + 1);
+      ti.append(el("span", "tag wdtag", `Rücknahme ${Math.min(n, p.withdraw_of || n)}/${p.withdraw_of || n}`), " ",
+        el("s", null, p.title || p.typ));
+      ti.title = "Nur die kurze Rücknahme geht hinaus, die Hörer löschen die Seite; danach ist sie weg";
+    } else ti.append((p.title || p.typ) + (p.resting ? " – ruht" : ""));
+    if (p.new && !p.resting && !p.withdrawn) ti.append(" ", el("span", "tag upd", "neu"));
     if (p.pri >= 3) ti.append(" ", el("span", "tag alarm", "Notfall"));
     const off = el("button", "offbtn", "✕");
     off.type = "button";
@@ -2542,8 +2547,9 @@ function renderTxView() {
         try { await api("POST", "/tx/restore", { provider: b.provider, key: b.pkey }); toast("Kommt mit dem nächsten Abgleich der Quelle wieder."); refreshTx(); }
         catch (e) { toast(e.message, true); }
       };
+      const left = b.withdraw_left;
       row.append(el("span", "pg", b.id ? `P${b.id}` : ""), el("span", "ti", b.title || `${b.provider}/${b.pkey}`),
-        el("span", "meta", b.provider), again);
+        el("span", "meta", `noch ${left} Rücknahme${left === 1 ? "" : "n"}`), again);
       ol.append(row);
     }
     nx.append(ol);
@@ -2562,7 +2568,9 @@ function renderTxView() {
       ll.append(row);
       continue;
     }
-    const ti = el("span", "ti", p.title || p.typ);
+    const ti = el("span", "ti");
+    if (p.result === "withdrawn") ti.append(el("span", "tag wdtag", "Rücknahme"), " ", el("s", null, p.title || p.typ));
+    else ti.append(p.title || p.typ);
     if (p.pri >= 3) ti.append(" ", el("span", "tag alarm", "Notfall"));
     const res = p.result === "ok" ? ["ok", `${p.sent}/${p.total} ✓`] : p.result === "withdrawn"
       ? ["old", `${p.sent}/${p.total} ✕`] : ["part", `${p.sent}/${p.total} ⏸`];

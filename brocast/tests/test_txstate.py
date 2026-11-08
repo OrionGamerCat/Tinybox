@@ -100,6 +100,15 @@ class TakeOffAirTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.store.get_page("tinybox", "26").state, "active")
         self.assertEqual(self.store.list_blocked(), [])
 
+    async def test_block_dropped_when_source_drops_it(self):
+        self.st.sync("tinybox", {"26": BULLETIN, "27": BULLETIN})
+        self.st.take_off_air(self.store.get_page("tinybox", "26").id)
+        nxt = {p["key"]: p for p in self.car.tx_state()["next"]}
+        self.assertEqual((nxt["26"]["withdrawn"], nxt["26"]["withdraw_left"],
+                          nxt["26"]["withdraw_of"]), (True, 3, 3))
+        self.st.sync("tinybox", {"27": BULLETIN})            # deleted in the TinyBox
+        self.assertEqual(self.store.list_blocked(), [])
+
     async def test_restore_and_guard(self):
         self.st.put("tinybox", "27", BULLETIN)
         pid = self.store.get_page("tinybox", "27").id
