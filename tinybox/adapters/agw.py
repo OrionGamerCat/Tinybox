@@ -31,7 +31,7 @@ from collections import deque
 from prcore.agw import PID_NO_L3, AgwProtocolError, Frame, read_frame, via_data
 from prcore.termcolor import OK
 
-from .. import chatimg, linkq, logsetup, texts
+from .. import chatimg, framemon, linkq, logsetup, texts
 from ..app import App
 from ..config import is_valid_call, normalize_call
 from ..session import MAX_LINE, Session
@@ -216,6 +216,8 @@ class AgwAdapter:
         self.quality_cfg = linkq.cfg_from(self.cfg.direwolf)
         self.q_supported: bool | None = None    # None = not known yet (per AGW connect)
         self._q_reply = asyncio.Event()
+        # CR83: own sent frames from the Direwolf fork ('O'), per AGW connect
+        self.own_frames = False
 
     def describe(self) -> str:
         """For STATUS and the web GUI."""
@@ -239,8 +241,11 @@ class AgwAdapter:
         else:
             self.send(Frame("M", self.radio_port, PID_NO_L3, self.mycall, dest,
                             text.encode("utf-8")))
+        # HEX view; with the fork's own frames (CR83) the frame itself is in the
+        # monitor, the line then only goes into the log file
         logging.getLogger("tinybox.monitor.agw").info("UI %s > %s", dest, text,
-                                                      extra={"ui_hex": text.encode("utf-8").hex()})   # HEX view
+                                                      extra={"ui_hex": text.encode("utf-8").hex(),
+                                                             "framed": self.own_frames})
 
     # --- main loop --------------------------------------------------------
 
@@ -263,10 +268,12 @@ class AgwAdapter:
             self._writer = writer
             watchdog = asyncio.create_task(self._idle_watchdog())
             self.q_supported = None
+            self.own_frames = False
             quality = asyncio.create_task(self._quality_poll())
             try:
                 self.send(Frame("R"))
                 self.send(Frame("X", self.radio_port, call_from=self.mycall))
+                self._monitor_on()
                 self.connected.set()
                 while True:
                     frame = await read_frame(reader)
@@ -298,6 +305,9 @@ class AgwAdapter:
         """Count and tag the frame, then handle it. The '<<' / '>>' lines are the
         layer below the session text: they show whether a line is missing on the
         frame level or above it (CR32)."""
+        if f.kind in ("K", "O"):                 # CR83: monitor copies, not traffic
+            self._monitor_frame(f)
+            return
         logsetup.counters.frames_in += 1
         conn = self.conns.get(normalize_call(self._remote_of(f)))
         with logsetup.session_context(getattr(conn, "log_ctx", None) or logsetup.NO_SESSION):
@@ -347,6 +357,29 @@ class AgwAdapter:
                 conn.quality.add(counters)
         else:
             log.debug("AGW frame '%s' ignored", f.kind)
+
+    # --- frame monitor (CR83) ------------------------------------------------
+
+    def _monitor_on(self) -> None:
+        """CR83: frames for the web GUI's monitor, once per AGW connect (both are
+        toggles in Direwolf, a new AGW connection starts with them off).
+        'k' = every received frame raw ('K'), standard Direwolf.
+        'O' = every frame Direwolf sends raw ('O') - only the TinyBox fork, it
+        answers with an empty 'O'. A Direwolf without it prints "Unexpected
+        Command" once and the monitor shows the received frames only."""
+        self.send(Frame("k"))
+        self.send(Frame("O"))
+
+    def _monitor_frame(self, f: Frame) -> None:
+        if f.kind == "O" and not f.data:
+            if not self.own_frames:
+                self.own_frames = True
+                log.info("Direwolf with TinyBox extension: own frames in the monitor")
+            return
+        # data: one byte port/TNC (channel << 4), then the frame without FCS
+        if len(f.data) < 16 or f.port != self.radio_port:
+            return
+        framemon.emit(f.data[1:], tx=f.kind == "O", mycall=self.mycall)
 
     def _on_connect(self, remote: str) -> None:
         remote = normalize_call(remote)

@@ -108,6 +108,8 @@ class HubLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         if not record.name.startswith("tinybox") or record.name.startswith("tinybox.adapters.web"):
             return
+        if getattr(record, "framed", False):     # CR83: the frame itself is in the monitor
+            return
         try:
             t = self.formatter_time(record)
             if record.name == "tinybox.frames":                     # CR52: channel frames
@@ -126,7 +128,8 @@ class HubLogHandler(logging.Handler):
                 item = {"type": "log", "t": t, "level": record.levelname,
                         "text": record.getMessage()}
                 if getattr(record, "ui_hex", None) is not None and isinstance(record.args, tuple):
-                    # a UI frame TinyBox sent: payload for the HEX view (AGW mode has no frames)
+                    # a UI frame TinyBox sent: payload for the HEX view (AGW mode without
+                    # the fork's own frames, CR83)
                     item.update(dst=str(record.args[0]), hex=record.ui_hex)
             if threading.current_thread() is threading.main_thread():
                 self.hub.push(item)

@@ -1,7 +1,7 @@
 # TinyBox-Client – Change Requests
 
 Gesammelt beim ersten Test PC1 ↔ PC2 (OE3GAS, OE3TEC) am 09.10.2026, ergänzt laufend.
-Stand: 08.11.2026 (CR83 erfasst)
+Stand: 08.11.2026 (CR83 umgesetzt)
 
 ## Übersicht
 
@@ -61,7 +61,7 @@ Stand: 08.11.2026 (CR83 erfasst)
 | 73 | Benutzerprofil: Name, Locator, Home-BBS in TinyBox und Client (Terminal-Fragen, Formular im Client, `//PROF`, `//WHOIS`) | ✅ siehe unten (Funktest offen) |
 | 79 | APRS-Statistik: Netzgraph (Bubbles, Knoten, Wege) mit Filter nach Paketart, Geräte-Torte | ✅ Stufe 1 siehe unten (Stufe 2 offen) |
 | 82 | TinyBox: Sysop-Befehl `RELOAD` – `tinybox.conf` neu einlesen, ohne die User zu trennen | ✅ siehe unten |
-| 83 | TinyBox-Web-GUI: Frame-Monitor auch im AGW-Mode – gehörte Frames (Stufe 1) und eigene gesendete Frames über den Direwolf-Fork (Stufe 2) | offen, siehe unten |
+| 83 | TinyBox-Web-GUI: Frame-Monitor auch im AGW-Mode – gehörte Frames (Stufe 1) und eigene gesendete Frames über den Direwolf-Fork (Stufe 2) | ✅ siehe unten (Funktest offen) |
 
 ## CR2 – Emojis (erledigt 11.10.2026)
 
@@ -2602,7 +2602,7 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
 - Sysop-Konsole `RELOAD` (Hilfe ergänzt), Sysop-Web-GUI Knopf **Reload** (Ergebnis im Dialog),
   `POST /api/reload`. Tests: `tests/test_reload.py`.
 
-## CR83 – Frame-Monitor auch im AGW-Mode (offen, 08.11.2026)
+## CR83 – Frame-Monitor auch im AGW-Mode (✅ 08.11.2026, Funktest offen)
 
 ### Erfassung (OE3GAS, 08.11.2026)
 
@@ -2647,3 +2647,23 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   Stufe 2 aktiv (erstes `O` gesehen oder Fork per Startmeldung erkannt), entfallen die bisherigen
   Log-Zeilen `UI …` für eigene UI-Frames im Monitor, damit nichts doppelt steht.
 - Mit einem Original-Direwolf bleibt es bei Stufe 1.
+
+### Umsetzung (08.11.2026)
+
+- **TinyBox** (`tinybox/adapters/agw.py`): nach jedem AGW-Connect einmal `k` und `O`
+  (`_monitor_on`). `K` → `framemon.emit(…, tx=False)`, `O` mit Daten → `tx=True`, nur Frames des
+  eigenen Kanals (`[agw] channel`). Modulo 128 wird geschätzt (die Verbindungen hält Direwolf).
+  `K`/`O` zählen nicht als Verkehr (`frames_in`) und kommen nicht ins Debug-Log.
+- Ein leeres `O` (Antwort des Forks) schaltet `own_frames` ein, im Log
+  `Direwolf with TinyBox extension: own frames in the monitor`. Dann erscheinen die eigenen
+  UI-Frames nur noch als Frame im Monitor; die Zeile `UI … > …` geht weiter in die Logdatei, aber
+  nicht mehr in den Monitor (`framed`).
+- **Direwolf-Fork** (oe3gas/direwolf-tinybox `62246e8`, Fork-Version 2026.11.08): AGW `O` ist ein
+  Umschalter wie `k`, die Antwort ein leeres `O`; danach jeder gesendete Frame (nach dem Senden in
+  `send_one_frame()`, auch Wiederholungen) als `O`, aufgebaut wie `K`. Beschrieben in `TINYBOX.md`.
+  Unter Linux geprüft: UI-Frame und SABME mit Wiederholungen kommen als `O`.
+- Mit einem Original-Direwolf: einmal „Unexpected Command“ in dessen Fenster, der Monitor zeigt
+  die empfangenen Frames.
+- Tests: `tests/test_agw_monitor.py` (einmal `k`/`O` je Connect, RX-Frames, anderer Kanal
+  ignoriert, TX-Frames mit Fork, Zähler, UI-Zeile ausgeblendet).
+- Funktest auf der Hinteralm offen: neue `direwolf-tinybox.exe` und `git pull` + `RESTART` der TinyBox.

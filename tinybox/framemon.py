@@ -1,7 +1,9 @@
-"""Frame monitor for the web GUI (CR52, KISS mode).
+"""Frame monitor for the web GUI (CR52 KISS mode, CR83 AGW mode).
 
 In KISS mode TinyBox does AX.25 itself, so it knows every frame it hears on the
-channel and every frame it sends - also its own, which Direwolf never shows.
+channel and every frame it sends. In AGW mode Direwolf hands out the frames it
+hears raw ('k' / 'K'), and the TinyBox fork of Direwolf also the ones it sends
+('O', CR83) - a standard Direwolf shows the own frames to nobody.
 Each frame becomes one monitor entry in parts (time, calls, type, text, kind;
 I and UI frames also len = payload bytes and hex = the payload as hex; every
 frame raw = all its bytes as hex and ctl = offset of the control field, for
