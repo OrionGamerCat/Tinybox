@@ -1,7 +1,7 @@
 # TinyBox-Client – Change Requests
 
 Gesammelt beim ersten Test PC1 ↔ PC2 (OE3GAS, OE3TEC) am 09.10.2026, ergänzt laufend.
-Stand: 07.11.2026 (CR79 Stufe 1 umgesetzt)
+Stand: 08.11.2026 (CR82 erfasst)
 
 ## Übersicht
 
@@ -60,6 +60,7 @@ Stand: 07.11.2026 (CR79 Stufe 1 umgesetzt)
 | 53 | TinyBox-Web-GUI: Monitor auf schwarzem Hintergrund (wie im Client) | ✅ siehe unten |
 | 73 | Benutzerprofil: Name, Locator, Home-BBS in TinyBox und Client (Terminal-Fragen, Formular im Client, `//PROF`, `//WHOIS`) | ✅ siehe unten (Funktest offen) |
 | 79 | APRS-Statistik: Netzgraph (Bubbles, Knoten, Wege) mit Filter nach Paketart, Geräte-Torte | ✅ Stufe 1 siehe unten (Stufe 2 offen) |
+| 82 | TinyBox: Sysop-Befehl `RELOAD` – `tinybox.conf` neu einlesen, ohne die User zu trennen | offen, siehe unten |
 
 ## CR2 – Emojis (erledigt 11.10.2026)
 
@@ -2519,3 +2520,59 @@ Kanal 10 nur per Klick (Alt+0 bleibt der Monitor).
   einer Zufallszahl, dann die Zahl; der Wurf kommt aus beiden zusammen.
 - Funkerisch: **Locator-Raten** – die Gegenstation nennt ein gehörtes Rufzeichen, man tippt
   dessen Locator, Punkte nach Entfernung.
+
+## CR82 – TinyBox: `RELOAD` – Konfiguration neu einlesen ohne Disconnect (offen, 08.11.2026)
+
+### Erfassung (OE3GAS, 08.11.2026)
+
+- `RESTART` trennt alle User: die Sessions werden beendet und die TinyBox schließt ihre
+  AGW-Verbindung, Direwolf räumt dabei alle AX.25-Links dieses Clients ab.
+- Neu: Sysop-Befehl **`RELOAD`** liest `tinybox.conf` neu ein und übernimmt **nur** die Werte, die
+  sich im laufenden Betrieb ändern lassen. Kein User wird getrennt, die AGW-Verbindung bleibt stehen.
+- Danach eine Liste: **geänderte Werte** (übernommen) und **ignorierte Werte**, die einen
+  `RESTART` brauchen.
+
+### Vorschlag zur Umsetzung (Claude)
+
+- **Ablauf:** wie bei `RESTART` zuerst `config.load()`. Hat die Datei einen Fehler, wird nichts
+  geändert (Meldung wie `RESTART_BAD_CONFIG`). Sonst neue und laufende Konfiguration Feld für Feld
+  vergleichen (`[abschnitt] schlüssel`), live-fähige Werte übernehmen, die anderen stehen lassen.
+- **Ausgabe**, z. B.:
+
+  ```
+  RELOAD tinybox.conf
+  changed:
+    [beacon] interval_min      30 -> 60
+    [chat_boards] DX           new (24h)
+  needs RESTART (ignored):
+    [agw] port                 8000 -> 8001
+  ```
+
+  Nichts geändert: `RELOAD: no changes`. Passwörter und Token nur als `(changed)`, nie im Klartext.
+  Dieselbe Liste geht ins Log. Ignorierte Werte wirken beim nächsten `RESTART` (der liest die
+  Datei ohnehin neu).
+- **Wo:** überall, wo es `RESTART` gibt – lokale Konsole, Sysop über Telnet bzw. Funk, Sysop-Web-GUI
+  (Knopf neben Restart, Liste als Antwort).
+- **Live-fähig (Entwurf, beim Einbauen Abschnitt für Abschnitt prüfen):**
+  - `[station]` sysop_call, sysop_via_radio, haddress, qth, freq, locator
+  - `[mailbox]` alle Werte (max_users, idle_timeout_min usw. gelten ab dann; laufende Sessions
+    bleiben, auch wenn mehr verbunden sind als das neue max_users)
+  - `[logging]` level, debug, keep_days, monitor
+  - `[beacon]`, `[update]`, `[client]`, `[rubrics]`, `[chat_motd]`
+  - `[chat]` history_lines, max_line, image_max; `[chat_boards]` neue und geänderte Boards.
+    Ein gelöschtes Board, in dem gerade jemand ist, bleibt bis zum Leeren bzw. bis `RESTART`
+    (steht dann unter „ignored“)
+  - `[brocast]` publish, token, destinations, rubrics, max_bytes, sync_min, air_days,
+    alert_destinations
+  - `[inbox]` poll_sec
+  - `[forward]` bid_days, aliases, publish_to_brocast, Partner (neu, geändert, entfernt) samt
+    routes, areas, timeout, auto. Ein Partner, mit dem gerade eine Forward-Session läuft, wird
+    erst nach deren Ende geändert
+  - `[agw]` quality_* (Linkqualität)
+- **Nur mit `RESTART`** (immer unter „ignored“):
+  - `[station]` mailbox_call (ist bei Direwolf registriert)
+  - `[radio]`, `[agw]` host/port/radio_port/paclen/max_outstanding, `[kiss]`, `[ax25]`
+  - `[telnet]`, `[axudp]`, `[web]`, `[console]`, `[mqtt]` (Sockets, Verbindungen)
+  - `[storage]`, `[logging]` log_dir, `[inbox]` enabled/directory, `[forward]` enabled/listen_*,
+    `[chat]` enabled
+- Unbekannte oder veraltete Schlüssel: wie beim Start als Hinweis (CR70) mit ausgeben.
